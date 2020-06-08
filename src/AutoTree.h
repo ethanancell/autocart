@@ -41,6 +41,7 @@ public:
 
 private:
   node* root;
+  int obsToCreate = 0; // The number of observations in DataFrame used to create tree
 
   void destroyTree(node* leaf);
 
@@ -50,7 +51,7 @@ private:
   void preorderPrint(node* leaf, int level);
   void printNode(node* x);
 
-  node* createTreeRec(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level);
+  node* createTreeRec(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
 };
 
 #endif

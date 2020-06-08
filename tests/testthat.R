@@ -17,7 +17,7 @@ locations <- snow %>%
   select(LONGITUDE, LATITUDE)
 locations <- as.matrix(locations)
 
-alpha = 0.5
+alpha = 1
 
 # For the pure sake of testing, let's give all the missing values in snow just the average of the
 # non-missing column values.
@@ -27,9 +27,14 @@ for (i in 1:ncol(snow)) {
 
 # Autocart model
 predictions <- autocart(as.matrix(response), snow, locations, alpha)
-testSpatialMethods(as.matrix(response), locations)
-subsetRows(snow, c(2,3))
-testSplit(as.matrix(response), as.matrix(snow$ELEVATION), locations, alpha)
+
+# Don't autorun this section
+if (FALSE) {
+  # Save the result as a csv
+  cluster <- as.factor(predictions)
+  levels(cluster) <- 1:length(levels(cluster))
+  savefile <- cbind(snow, predictions, cluster)
+}
 
 # Test creating the tree
 test_tree()

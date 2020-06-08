@@ -20,6 +20,7 @@
  * @author Ethan Ancell
  */
 #include <Rcpp.h>
+#include <math.h>
 #include "AutoTree.h"
 #include "SpatialMethods.h"
 
@@ -43,8 +44,14 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       stop("Creation of autotree failed. Locations matrix should only have two columns.");
     }
 
-    root = createTreeRec(response, data, locations, alpha, 0);
-    //preorderPrint();
+    // Keep track of the # of DataFrame rows that were used to create the tree
+    // (This is used for some types of stopping criteria)
+    obsToCreate = response.size();
+
+    // Kick off the recursive algorithm that assigns the nodes in the tree
+    root = createTreeRec(response, data, locations, alpha, 0, response.size());
+
+    preorderPrint();
   }
   else {
     Rcout << "A tree has already been created!" << std::endl;
@@ -52,21 +59,19 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 }
 
 // Recursive splitting function
-node* AutoTree::createTreeRec(NumericVector response,
-                           DataFrame data,
-                           NumericMatrix locations,
-                           double alpha,
-                         int level) {
-
-  // Base case
-  // Our stopping condition is that the vector of responses is less than 5?
-  // This probably isn't a very good stopping condition but it is what we will
-  // do until I get something better.
+node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs) {
+  /*
+  // Stopping criteria based on height of the tree
   if (level > 2) {
+    return NULL;
+  }
+  */
+  if (numObs < 10) {
     return NULL;
   }
 
   // Loop through all the columns, finding the best split
+  bool changedSplit = false;
   int bestColumn = 0;
   int bestSplit = 0;
   double maxGoodness = 0;
@@ -83,7 +88,14 @@ node* AutoTree::createTreeRec(NumericVector response,
       bestColumn = column;
       bestSplit = which_max(goodnessVector);
       maxGoodness = tempGoodness;
+      changedSplit = true;
     }
+  }
+
+  // If we never found a better split, then we should return a null node.
+  if (!changedSplit) {
+    Rcout << "We never even found a better split..." << std::endl;
+    return NULL;
   }
 
   // What value will we split on?
@@ -109,11 +121,25 @@ node* AutoTree::createTreeRec(NumericVector response,
   NumericMatrix leftLocations = subset(locations, isLeft);
   NumericMatrix rightLocations = subset(locations, !isLeft);
 
-  node* leftnode = createTreeRec(leftResponse, leftDataFrame, leftLocations, alpha, level + 1);
-  // Only create a right node if the left child node was successful.
+  // TODO: Delete this output
+  Rcout << "Size of leftResponse: " << leftResponse.size() << std::endl;
+  Rcout << "Size of rightResponse: " << rightResponse.size() << std::endl;
+
+  node* leftnode = NULL;
   node* rightnode = NULL;
-  if (leftnode != NULL) {
-    rightnode = createTreeRec(rightResponse, rightDataFrame, rightLocations, alpha, level + 1);
+
+  // If a split actually occured here, we can try splitting further.
+  if (leftResponse.size() != 0 && rightResponse.size() != 0) {
+    leftnode = createTreeRec(leftResponse, leftDataFrame, leftLocations, alpha, level + 1, leftResponse.size());
+    rightnode = createTreeRec(rightResponse, rightDataFrame, rightLocations, alpha, level + 1, rightResponse.size());
+
+    if (leftnode == NULL || rightnode == NULL) {
+      // Free the memory that was created and set them both to NULL values.
+      destroyTree(leftnode);
+      destroyTree(rightnode);
+      leftnode = NULL;
+      rightnode = NULL;
+    }
   }
 
   // Find the average response value in this particular group
@@ -126,6 +152,7 @@ node* AutoTree::createTreeRec(NumericVector response,
   // Check if this is a terminal node
   bool isTerminalNode = false;
   if (leftnode == NULL && rightnode == NULL) {
+    Rcout << "setting to terminal node" << std::endl;
     isTerminalNode = true;
   }
 
@@ -140,10 +167,7 @@ node* AutoTree::createTreeRec(NumericVector response,
  * with goodness values. The goodness value at location "i" evaluates the split
  * from 1:i vs i+1:n, where n is the length of the response/x_vector.
  */
-NumericVector AutoTree::split(NumericVector response,
-                              NumericVector x_vector,
-                              NumericMatrix locations,
-                              double alpha) {
+NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations, double alpha) {
 
   // Make copies as to not modify the original vectors
   NumericVector y = clone(response);

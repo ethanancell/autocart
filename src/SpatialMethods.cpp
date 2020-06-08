@@ -70,6 +70,11 @@ double moranI(NumericVector response, NumericMatrix weights) {
   }
   responseMean = responseMean / nObs;
 
+  /* If we assume that the weights matrix is symmetrical, then you can double
+   * the speed of calculations of Moran's I by doubling the sum of the values on the
+   * upper diagonal of the matrix
+   */
+
   // Numerator calculations
   double numerator = 0;
   for (int i=0; i<nObs; i++) {
