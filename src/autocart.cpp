@@ -1,5 +1,6 @@
 #include <Rcpp.h>
 #include "AutoTree.h"
+#include "SpatialMethods.h"
 
 using namespace Rcpp;
 
@@ -8,9 +9,16 @@ NumericVector autocart(NumericVector response, DataFrame data, NumericMatrix loc
   // Create the tree, then return the numeric vector with the predictions for
   // each of the observations that was used in building the trees.
   AutoTree myTree;
-  myTree.create_tree(response, data, locations, alpha);
+  myTree.createTree(response, data, locations, alpha);
 
   // By default, we will return a vector with the predicted response for each
   // of the observations that was used to create the tree in the first place.
   return myTree.predictDataFrame(data);
+}
+
+// TODO: Delete this section after test
+// [[Rcpp::export]]
+NumericVector testSpatialMethods(NumericVector response, NumericMatrix locations) {
+  NumericMatrix invWeights = getInvWeights(locations);
+  return NumericVector::create(moranI(response, invWeights));
 }

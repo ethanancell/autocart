@@ -5,3 +5,7 @@ autocart <- function(response, data, locations, alpha) {
     .Call(`_autocart_autocart`, response, data, locations, alpha)
 }
 
+testSpatialMethods <- function(response, locations) {
+    .Call(`_autocart_testSpatialMethods`, response, locations)
+}
+

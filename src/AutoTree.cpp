@@ -21,6 +21,7 @@
  */
 #include <Rcpp.h>
 #include "AutoTree.h"
+#include "SpatialMethods.h"
 
 using namespace Rcpp;
 
@@ -31,10 +32,19 @@ AutoTree::AutoTree() {
 // Kick off the splitting
 void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
   if (root == NULL) {
-    Rcout << "Creating the recursively partitioned tree." << std::endl;
-    root = createTreeRec(response, data, locations, alpha, 0);
+    // Error check
+    if (response.size() != data.nrows()) {
+      stop("Creation of autotree failed. Response vector not same length as the number of rows in the data matrix.");
+    }
+    if (response.size() != locations.rows()) {
+      stop("Creation of autotree failed. Response vector not same length as number of rows in the locations matrix.");
+    }
+    if (locations.cols() != 2) {
+      stop("Creation of autotree failed. Locations matrix should only have two columns.");
+    }
 
-    preorderPrint();
+    root = createTreeRec(response, data, locations, alpha, 0);
+    //preorderPrint();
   }
   else {
     Rcout << "A tree has already been created!" << std::endl;
@@ -165,7 +175,60 @@ NumericVector AutoTree::split(NumericVector response,
   NumericVector rMean = -temp / rightWt;
 
   NumericVector t1 = (leftWt*pow(lMean, 2) + rightWt*pow(rMean, 2)) / sum(wt * pow(y, 2));
-  return t1;
+
+  /* Calculate Moran's I statistic for each of the two halves
+   * The portion of the "goodness" value that is represented by the
+   * statistic of spatial autocorrelation will be known as "t2"
+   */
+  NumericVector t2(n-1);
+
+  /* Order the locations matrix rows in the same order as x.
+   * We'll do this by creating a whole new matrix and then copying the rows
+   * of the locations matrix to the new matrix.
+   *
+   * We do already have the IntegerVector x_order which makes this not too bad.
+   */
+  NumericMatrix orderedLocations(n, 2);
+  for (int i=0; i<n; i++) {
+    int slotLocation = x_order[i];
+    orderedLocations(slotLocation, _) = locations(i, _);
+  }
+
+  for (int splitLocation=0; splitLocation<n-1; splitLocation++) {
+    // Get the E1 and E2 partitions
+    NumericMatrix e1 = orderedLocations(Range(0, splitLocation), Range(0, 1));
+    NumericMatrix e2 = orderedLocations(Range(splitLocation+1, n), Range(0, 1));
+    NumericVector y1 = response[Range(0, splitLocation)];
+    NumericVector y2 = response[Range(splitLocation+1, n)];
+
+    // E1
+    // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
+    // leave it at the default value of 0)
+    if (splitLocation != 0) {
+      NumericMatrix weightsE1 = getInvWeights(e1);
+      double mi = moranI(y1, weightsE1);
+
+      // Scale so that it fits between 0 and 1
+      mi = (mi + 1.0) / 2.0;
+      t2[splitLocation] = mi * (splitLocation + 1);
+    }
+
+    // E2
+    // (As in E2, skip over splitLocation == n-2 where only one observation exists)
+    if (splitLocation != n-2) {
+      NumericMatrix weightsE2 = getInvWeights(e2);
+      double mi = moranI(y2, weightsE2);
+
+      // Scale to [0, 1]
+      mi = (mi + 1.0) / 2.0;
+      t2[splitLocation] += (mi * (n - splitLocation - 1));
+    }
+
+    t2[splitLocation] /= n;
+  }
+
+  // Return the linear combination of t1 and t2
+  return ((1 - alpha) * t1) + (alpha * t2);
 }
 
 /*

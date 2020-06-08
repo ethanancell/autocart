@@ -27,6 +27,7 @@ for (i in 1:ncol(snow)) {
 
 # Autocart model
 predictions <- autocart(as.matrix(response), snow, locations, alpha)
+testSpatialMethods(as.matrix(response), locations)
 subsetRows(snow, c(2,3))
 testSplit(as.matrix(response), as.matrix(snow$ELEVATION), locations, alpha)
 
