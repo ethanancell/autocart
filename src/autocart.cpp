@@ -4,6 +4,13 @@
 
 using namespace Rcpp;
 
+//' Return the numeric vector of predictions from an autocart tree.
+//'
+//' @param response A vector of numeric response values with no NA entries.
+//' @param data A dataframe for the predictor variables used in the autocart tree.
+//' @param locations A two-column matrix with coordinates for the observations the predictor dataframe.
+//' @param alpha A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.
+//' @return A predicted response value for each of the dataframe observations that were used to create the tree.
 // [[Rcpp::export]]
 NumericVector autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
   // Create the tree, then return the numeric vector with the predictions for

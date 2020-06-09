@@ -7,10 +7,11 @@ Maintainer: Ethan Ancell <ethanancell@gmail.com>
 Description: An implementation of the classification and regression tree (CART) algorithm
     that gives greater flexibility in modifying the splitting function. The greater
     flexibility can be used to make splits according to measures of spatial autocorrelation.
-License: What license is it under?
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Imports: Rcpp (>= 1.0.4.6)
 LinkingTo: Rcpp
 Suggests: 
     testthat
+RoxygenNote: 7.1.0
