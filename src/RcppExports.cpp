@@ -19,22 +19,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// testSpatialMethods
-NumericVector testSpatialMethods(NumericVector response, NumericMatrix locations);
-RcppExport SEXP _autocart_testSpatialMethods(SEXP responseSEXP, SEXP locationsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type response(responseSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type locations(locationsSEXP);
-    rcpp_result_gen = Rcpp::wrap(testSpatialMethods(response, locations));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_autocart_autocart", (DL_FUNC) &_autocart_autocart, 4},
-    {"_autocart_testSpatialMethods", (DL_FUNC) &_autocart_testSpatialMethods, 2},
     {NULL, NULL, 0}
 };
 

@@ -29,7 +29,7 @@ double findMax(NumericVector x);
  */
 class AutoTree {
 public:
-  AutoTree();
+  AutoTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
   ~AutoTree();
   void destroyTree();
 

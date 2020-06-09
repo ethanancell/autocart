@@ -26,8 +26,9 @@
 
 using namespace Rcpp;
 
-AutoTree::AutoTree() {
+AutoTree::AutoTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
   root = NULL;
+  createTree(response, data, locations, alpha);
 }
 
 // Kick off the splitting
@@ -51,7 +52,9 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     // Kick off the recursive algorithm that assigns the nodes in the tree
     root = createTreeRec(response, data, locations, alpha, 0, response.size());
 
-    preorderPrint();
+    // Uncomment if you want to view the exact structure of the tree via a
+    // pre-order print to the console.
+    // preorderPrint();
   }
   else {
     Rcout << "A tree has already been created!" << std::endl;
@@ -71,7 +74,6 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   }
 
   // Loop through all the columns, finding the best split
-  bool changedSplit = false;
   int bestColumn = 0;
   int bestSplit = 0;
   double maxGoodness = 0;
@@ -88,14 +90,7 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
       bestColumn = column;
       bestSplit = which_max(goodnessVector);
       maxGoodness = tempGoodness;
-      changedSplit = true;
     }
-  }
-
-  // If we never found a better split, then we should return a null node.
-  if (!changedSplit) {
-    Rcout << "We never even found a better split..." << std::endl;
-    return NULL;
   }
 
   // What value will we split on?
@@ -120,10 +115,6 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   DataFrame rightDataFrame = subset(data, !isLeft);
   NumericMatrix leftLocations = subset(locations, isLeft);
   NumericMatrix rightLocations = subset(locations, !isLeft);
-
-  // TODO: Delete this output
-  Rcout << "Size of leftResponse: " << leftResponse.size() << std::endl;
-  Rcout << "Size of rightResponse: " << rightResponse.size() << std::endl;
 
   node* leftnode = NULL;
   node* rightnode = NULL;
@@ -152,7 +143,7 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   // Check if this is a terminal node
   bool isTerminalNode = false;
   if (leftnode == NULL && rightnode == NULL) {
-    Rcout << "setting to terminal node" << std::endl;
+    // Rcout << "setting to terminal node" << std::endl;
     isTerminalNode = true;
   }
 
@@ -206,49 +197,54 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
    */
   NumericVector t2(n-1);
 
-  /* Order the locations matrix rows in the same order as x.
-   * We'll do this by creating a whole new matrix and then copying the rows
-   * of the locations matrix to the new matrix.
-   *
-   * We do already have the IntegerVector x_order which makes this not too bad.
-   */
-  NumericMatrix orderedLocations(n, 2);
-  for (int i=0; i<n; i++) {
-    int slotLocation = x_order[i];
-    orderedLocations(slotLocation, _) = locations(i, _);
-  }
-
-  for (int splitLocation=0; splitLocation<n-1; splitLocation++) {
-    // Get the E1 and E2 partitions
-    NumericMatrix e1 = orderedLocations(Range(0, splitLocation), Range(0, 1));
-    NumericMatrix e2 = orderedLocations(Range(splitLocation+1, n), Range(0, 1));
-    NumericVector y1 = response[Range(0, splitLocation)];
-    NumericVector y2 = response[Range(splitLocation+1, n)];
-
-    // E1
-    // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
-    // leave it at the default value of 0)
-    if (splitLocation != 0) {
-      NumericMatrix weightsE1 = getInvWeights(e1);
-      double mi = moranI(y1, weightsE1);
-
-      // Scale so that it fits between 0 and 1
-      mi = (mi + 1.0) / 2.0;
-      t2[splitLocation] = mi * (splitLocation + 1);
+  // If no weighting on t2 is desired (only use reduction in variance), no need to expend
+  // the computational energy for this section.
+  // TODO: delete this comment
+  if (alpha != 0) {
+    /* Order the locations matrix rows in the same order as x.
+    * We'll do this by creating a whole new matrix and then copying the rows
+    * of the locations matrix to the new matrix.
+    *
+    * We do already have the IntegerVector x_order which makes this not too bad.
+    */
+    NumericMatrix orderedLocations(n, 2);
+    for (int i=0; i<n; i++) {
+      int slotLocation = x_order[i];
+      orderedLocations(slotLocation, _) = locations(i, _);
     }
 
-    // E2
-    // (As in E2, skip over splitLocation == n-2 where only one observation exists)
-    if (splitLocation != n-2) {
-      NumericMatrix weightsE2 = getInvWeights(e2);
-      double mi = moranI(y2, weightsE2);
+    for (int splitLocation=0; splitLocation<n-1; splitLocation++) {
+      // Get the E1 and E2 partitions
+      NumericMatrix e1 = orderedLocations(Range(0, splitLocation), Range(0, 1));
+      NumericMatrix e2 = orderedLocations(Range(splitLocation+1, n), Range(0, 1));
+      NumericVector y1 = response[Range(0, splitLocation)];
+      NumericVector y2 = response[Range(splitLocation+1, n)];
 
-      // Scale to [0, 1]
-      mi = (mi + 1.0) / 2.0;
-      t2[splitLocation] += (mi * (n - splitLocation - 1));
+      // E1
+      // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
+      // leave it at the default value of 0)
+      if (splitLocation != 0) {
+        NumericMatrix weightsE1 = getInvWeights(e1);
+        double mi = moranI(y1, weightsE1);
+
+        // Scale so that it fits between 0 and 1
+        mi = (mi + 1.0) / 2.0;
+        t2[splitLocation] = mi * (splitLocation + 1);
+      }
+
+      // E2
+      // (As in E2, skip over splitLocation == n-2 where only one observation exists)
+      if (splitLocation != n-2) {
+        NumericMatrix weightsE2 = getInvWeights(e2);
+        double mi = moranI(y2, weightsE2);
+
+        // Scale to [0, 1]
+        mi = (mi + 1.0) / 2.0;
+        t2[splitLocation] += (mi * (n - splitLocation - 1));
+      }
+
+      t2[splitLocation] /= n;
     }
-
-    t2[splitLocation] /= n;
   }
 
   // Return the linear combination of t1 and t2

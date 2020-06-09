@@ -17,13 +17,17 @@ locations <- snow %>%
   select(LONGITUDE, LATITUDE)
 locations <- as.matrix(locations)
 
-alpha = 1
+alpha = 0
 
 # For the pure sake of testing, let's give all the missing values in snow just the average of the
 # non-missing column values.
 for (i in 1:ncol(snow)) {
   snow[is.na(snow[, i]), i] <- mean(snow[[i]], na.rm = TRUE)
 }
+
+
+# AutoCart object test
+
 
 # Autocart model
 predictions <- autocart(as.matrix(response), snow, locations, alpha)
@@ -34,6 +38,7 @@ if (FALSE) {
   cluster <- as.factor(predictions)
   levels(cluster) <- 1:length(levels(cluster))
   savefile <- cbind(snow, predictions, cluster)
+  write_csv(savefile, "autocart_output.csv")
 }
 
 # Test creating the tree

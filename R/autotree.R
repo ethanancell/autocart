@@ -1,16 +1,2 @@
-setClass(
-  # Class name
-  "Autocart",
-
-  # Slot type
-  representation(
-    name = "character",
-    birth = "Date"
-  ),
-
-  # Initialize slots
-  prototype = list(
-    name = as.character(NULL),
-    birth = as.Date(as.character(NULL))
-  )
-)
+# Create the R interface to the C++ AutoTree class
+# Rcpp::sourceCpp(system.file("src", "autocart.cpp", package = "autocart", mustWork = TRUE))
