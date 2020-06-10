@@ -44,6 +44,9 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     if (locations.cols() != 2) {
       stop("Creation of autotree failed. Locations matrix should only have two columns.");
     }
+    if (alpha < 0 || alpha > 1) {
+      stop("Creation of autotree failed. Alpha value not between 0 and 1.");
+    }
 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
@@ -77,6 +80,7 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   int bestColumn = 0;
   int bestSplit = 0;
   double maxGoodness = 0;
+  bool betterSplitFound = false;
   for (int column=0; column<data.length(); column++) {
     /* We find the "goodness" vector returned by the splitting function.
      * if there is a goodness value that is better than the best one we have,
@@ -90,7 +94,14 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
       bestColumn = column;
       bestSplit = which_max(goodnessVector);
       maxGoodness = tempGoodness;
+      betterSplitFound = true;
     }
+  }
+
+  // If no better split is ever found, then we can just return NULL.
+  if (!betterSplitFound) {
+    //Rcout << "No split was found for this group." << std::endl;
+    return NULL;
   }
 
   // What value will we split on?

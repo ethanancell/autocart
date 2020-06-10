@@ -1,7 +1,7 @@
-context("Checking that autocart returns a numeric vector.")
+context("Checking that autocart returns sensical output.")
 library(autocart)
 
-test_that("Autocart returns a numeric vector", {
+test_that("Autocart returns sensical output", {
   # Process the dataset to where it can be used by autocart
   snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
   response <- as.matrix(snow$yr50)
@@ -19,4 +19,5 @@ test_that("Autocart returns a numeric vector", {
 
   # TESTING
   expect_is(predictions, "numeric")
+  expect_equal(length(predictions), length(response))
 })
