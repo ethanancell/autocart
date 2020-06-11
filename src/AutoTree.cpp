@@ -21,14 +21,14 @@
  */
 #include <Rcpp.h>
 #include <math.h>
+#include <bits/stdc++.h>
 #include "AutoTree.h"
 #include "SpatialMethods.h"
 
 using namespace Rcpp;
 
-AutoTree::AutoTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
+AutoTree::AutoTree() {
   root = NULL;
-  createTree(response, data, locations, alpha);
 }
 
 // Kick off the splitting
@@ -51,28 +51,84 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
     obsToCreate = response.size();
+    Function subset("subset");
 
-    // Kick off the recursive algorithm that assigns the nodes in the tree
-    root = createTreeRec(response, data, locations, alpha, 0, response.size());
+    // Try declaring everything first?
+    DataFrame nodeData;
+    NumericVector nodeResponse;
+    NumericMatrix nodeLocations;
+    NumericVector splitColumnVector;
+    LogicalVector isLeft;
+    NumericVector leftResponse;
+    NumericVector rightResponse;
+    DataFrame leftDataFrame;
+    DataFrame rightDataFrame;
+    NumericMatrix leftLocations;
+    NumericMatrix rightLocations;
+
+    // Try this without recursion
+    std::stack<node*> treeCreationStack;
+    root = createNode(response, data, locations, alpha, 0, response.size());
+
+    treeCreationStack.push(root);
+    while (!treeCreationStack.empty()) {
+      // Take the node off the stack and try to assign its children
+      node* nextNode = treeCreationStack.top();
+      treeCreationStack.pop();
+
+      // Split the data according to what's contained in "nextNode"
+      nodeData = nextNode->data;
+      nodeResponse = nextNode->response;
+      nodeLocations = nextNode->locations;
+
+      splitColumnVector = nodeData[nextNode->column];
+      isLeft = splitColumnVector <= nextNode->key;
+
+      leftResponse = nodeResponse[isLeft];
+      rightResponse = nodeResponse[!isLeft];
+      leftDataFrame = subset(nodeData, isLeft);
+      rightDataFrame = subset(nodeData, !isLeft);
+      leftLocations = subset(nodeLocations, isLeft);
+      rightLocations = subset(nodeLocations, !isLeft);
+
+      node* leftnode = NULL;
+      node* rightnode = NULL;
+
+      // If a split occurs here, attempt to create children
+      if (leftResponse.size() > 0 && rightResponse.size() > 0) {
+        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, 0, leftResponse.size());
+        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, 0, rightResponse.size());
+
+        if (leftnode != NULL && rightnode != NULL) {
+          // We have a legitimate split. Add the references to the children of nextNode
+          // and then add these two splits onto the stack.
+          nextNode->left = leftnode;
+          nextNode->right = rightnode;
+
+          treeCreationStack.push(leftnode);
+          treeCreationStack.push(rightnode);
+        }
+        else {
+          leftnode = NULL;
+          rightnode = NULL;
+          nextNode->isTerminalNode = true;
+        }
+      }
+    }
 
     // Uncomment if you want to view the exact structure of the tree via a
     // pre-order print to the console.
-    // preorderPrint();
+    //preorderPrint();
   }
   else {
-    Rcout << "A tree has already been created!" << std::endl;
+    stop("Trying to create an autotree when a root node already exists!");
   }
 }
 
 // Recursive splitting function
-node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs) {
-  /*
+node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs) {
   // Stopping criteria based on height of the tree
-  if (level > 2) {
-    return NULL;
-  }
-  */
-  if (numObs < 10) {
+  if (numObs < sqrt(obsToCreate)) {
     return NULL;
   }
 
@@ -101,6 +157,7 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   // If no better split is ever found, then we can just return NULL.
   if (!betterSplitFound) {
     //Rcout << "No split was found for this group." << std::endl;
+    //Rcout << "numObs: " << numObs << " | level: " << level << std::endl;
     return NULL;
   }
 
@@ -112,38 +169,6 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   x = x[order_x];
   int splitValue = x[bestSplit];
 
-  // The logical vector discovers the locations of the dataframe that
-  // follow the pattern of the "best split" at this subset of the data.
-  Function subset("subset");
-  NumericVector splitColumnVector = data[bestColumn];
-  LogicalVector isLeft = (splitColumnVector <= splitValue);
-
-  // Subset according to the left and right groups. This will get passed into
-  // the creation of the next set of nodes down the tree.
-  NumericVector leftResponse = response[isLeft];
-  NumericVector rightResponse = response[!isLeft];
-  DataFrame leftDataFrame = subset(data, isLeft);
-  DataFrame rightDataFrame = subset(data, !isLeft);
-  NumericMatrix leftLocations = subset(locations, isLeft);
-  NumericMatrix rightLocations = subset(locations, !isLeft);
-
-  node* leftnode = NULL;
-  node* rightnode = NULL;
-
-  // If a split actually occured here, we can try splitting further.
-  if (leftResponse.size() != 0 && rightResponse.size() != 0) {
-    leftnode = createTreeRec(leftResponse, leftDataFrame, leftLocations, alpha, level + 1, leftResponse.size());
-    rightnode = createTreeRec(rightResponse, rightDataFrame, rightLocations, alpha, level + 1, rightResponse.size());
-
-    if (leftnode == NULL || rightnode == NULL) {
-      // Free the memory that was created and set them both to NULL values.
-      destroyTree(leftnode);
-      destroyTree(rightnode);
-      leftnode = NULL;
-      rightnode = NULL;
-    }
-  }
-
   // Find the average response value in this particular group
   double averageResponse = 0;
   for (int i=0; i<response.size(); i++) {
@@ -151,19 +176,11 @@ node* AutoTree::createTreeRec(NumericVector response, DataFrame data, NumericMat
   }
   averageResponse = averageResponse / response.size();
 
-  // Check if this is a terminal node
-  bool isTerminalNode = false;
-  if (leftnode == NULL && rightnode == NULL) {
-    // Rcout << "setting to terminal node" << std::endl;
-    isTerminalNode = true;
-  }
-
-  // Create an instance of the node structure from this splitting level.
   int obsInNode = response.size();
-  node* newnode = new node{splitValue, bestColumn, obsInNode, averageResponse, isTerminalNode, leftnode, rightnode};
+  node* newnode = new node{splitValue, bestColumn, obsInNode, averageResponse, false, response, data, locations, NULL, NULL};
+
   return newnode;
 }
-
 
 /* Given an x_vector (predictor), return a vector of length size(x_vector) - 1
  * with goodness values. The goodness value at location "i" evaluates the split
@@ -206,12 +223,11 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
    * The portion of the "goodness" value that is represented by the
    * statistic of spatial autocorrelation will be known as "t2"
    */
-  NumericVector t2(n-1);
+  NumericVector t2(n-1, 0.0);
 
   // If no weighting on t2 is desired (only use reduction in variance), no need to expend
   // the computational energy for this section.
-  // TODO: delete this comment
-  if (alpha != 0) {
+  if (alpha > 0) {
     /* Order the locations matrix rows in the same order as x.
     * We'll do this by creating a whole new matrix and then copying the rows
     * of the locations matrix to the new matrix.
@@ -258,8 +274,18 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     }
   }
 
+  // TODO: delete This
+  /*
+  for (int i=0; i<t2.size(); i++) {
+    if (t2[i] < 0 || t2[i] > 1) {
+      Rcout << "Problem.... t2 at " << i << " is equal to " << t2[i] << std::endl;
+    }
+  }*/
+
   // Return the linear combination of t1 and t2
-  return ((1 - alpha) * t1) + (alpha * t2);
+  t1 = (1-alpha) * t1;
+  t2 = alpha * t2;
+  return t1 + t2;
 }
 
 /*
@@ -326,6 +352,8 @@ void AutoTree::inorderPrint(node* leaf, int level) {
 }
 
 void AutoTree::preorderPrint() {
+  Rcout << "PREORDER PRINT" << std::endl;
+  Rcout << "------------------" << std::endl;
   preorderPrint(root, 0);
 }
 

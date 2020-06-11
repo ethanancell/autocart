@@ -16,6 +16,12 @@ struct node {
   int obsInNode;
   double prediction;
   bool isTerminalNode;
+
+  // Pointers to the data in this node
+  NumericVector response;
+  DataFrame data;
+  NumericMatrix locations;
+
   node* left;
   node* right;
 };
@@ -29,7 +35,7 @@ double findMax(NumericVector x);
  */
 class AutoTree {
 public:
-  AutoTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
+  AutoTree();
   ~AutoTree();
   void destroyTree();
 
@@ -45,13 +51,13 @@ private:
 
   void destroyTree(node* leaf);
 
+  node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
+
   void inorderPrint();
   void inorderPrint(node* leaf, int level);
   void preorderPrint();
   void preorderPrint(node* leaf, int level);
   void printNode(node* x);
-
-  node* createTreeRec(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
 };
 
 #endif
