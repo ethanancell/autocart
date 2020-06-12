@@ -53,7 +53,6 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     obsToCreate = response.size();
     Function subset("subset");
 
-    // Try declaring everything first?
     DataFrame nodeData;
     NumericVector nodeResponse;
     NumericMatrix nodeLocations;
@@ -66,7 +65,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     NumericMatrix leftLocations;
     NumericMatrix rightLocations;
 
-    // Try this without recursion
+    // Create tree non-recursively using a stack
     std::stack<node*> treeCreationStack;
     root = createNode(response, data, locations, alpha, 0, response.size());
 
@@ -98,27 +97,25 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       if (leftResponse.size() > 0 && rightResponse.size() > 0) {
         leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, 0, leftResponse.size());
         rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, 0, rightResponse.size());
+      }
 
-        if (leftnode != NULL && rightnode != NULL) {
-          // We have a legitimate split. Add the references to the children of nextNode
-          // and then add these two splits onto the stack.
-          nextNode->left = leftnode;
-          nextNode->right = rightnode;
+      if (leftnode != NULL && rightnode != NULL) {
+        // We have a legitimate split. Add the references to the children of nextNode
+        // and then add these two splits onto the stack.
+        nextNode->left = leftnode;
+        nextNode->right = rightnode;
 
-          treeCreationStack.push(leftnode);
-          treeCreationStack.push(rightnode);
-        }
-        else {
-          leftnode = NULL;
-          rightnode = NULL;
-          nextNode->isTerminalNode = true;
-        }
+        treeCreationStack.push(leftnode);
+        treeCreationStack.push(rightnode);
+      }
+      else {
+        nextNode->isTerminalNode = true;
       }
     }
 
     // Uncomment if you want to view the exact structure of the tree via a
     // pre-order print to the console.
-    //preorderPrint();
+    // preorderPrint();
   }
   else {
     stop("Trying to create an autotree when a root node already exists!");
@@ -144,6 +141,14 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
      * and also the goodness value of that split.
      */
     NumericVector goodnessVector = split(response, data[column], locations, alpha);
+
+    // Replace all NaNs with 0
+    for (int tt=0; tt<goodnessVector.size(); tt++) {
+      if (NumericVector::is_na(goodnessVector[tt])) {
+        goodnessVector[tt] = 0;
+      }
+    }
+
     double tempGoodness = findMax(goodnessVector);
     if (tempGoodness > maxGoodness) {
       // We found a better split than the one we have currently
@@ -156,8 +161,6 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
 
   // If no better split is ever found, then we can just return NULL.
   if (!betterSplitFound) {
-    //Rcout << "No split was found for this group." << std::endl;
-    //Rcout << "numObs: " << numObs << " | level: " << level << std::endl;
     return NULL;
   }
 
@@ -274,14 +277,6 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     }
   }
 
-  // TODO: delete This
-  /*
-  for (int i=0; i<t2.size(); i++) {
-    if (t2[i] < 0 || t2[i] > 1) {
-      Rcout << "Problem.... t2 at " << i << " is equal to " << t2[i] << std::endl;
-    }
-  }*/
-
   // Return the linear combination of t1 and t2
   t1 = (1-alpha) * t1;
   t2 = alpha * t2;
@@ -345,8 +340,8 @@ void AutoTree::inorderPrint() {
 void AutoTree::inorderPrint(node* leaf, int level) {
   if (leaf != NULL) {
     inorderPrint(leaf->left, level+1);
-    Rcout << "Level: " << level << std::endl;
     printNode(leaf);
+    Rcout << "Level: " << level << std::endl;
     inorderPrint(leaf->right, level+1);
   }
 }
@@ -359,14 +354,15 @@ void AutoTree::preorderPrint() {
 
 void AutoTree::preorderPrint(node* leaf, int level) {
   if (leaf != NULL) {
-    Rcout << "Level: " << level << std::endl;
     printNode(leaf);
+    Rcout << "Level: " << level << std::endl;
     preorderPrint(leaf->left, level+1);
     preorderPrint(leaf->right, level+1);
   }
 }
 
 void AutoTree::printNode(node* x) {
+  Rcout << "----------" << std::endl;
   if (x->isTerminalNode) {
     Rcout << "TERMINAL NODE" << std::endl;
     Rcout << "Prediction: " << x->prediction << std::endl;
@@ -374,7 +370,6 @@ void AutoTree::printNode(node* x) {
   Rcout << "Key: " << x->key << std::endl;
   Rcout << "Column: " << x->column << std::endl;
   Rcout << "Obs in Node: " << x->obsInNode << std::endl;
-  Rcout << "----------" << std::endl;
 }
 
 /* Helper functions */
@@ -385,8 +380,11 @@ void AutoTree::printNode(node* x) {
 double findMax(NumericVector x) {
   double maximum = x[0];
   for (int i=0; i<x.size(); i++) {
-    if (x[i] > maximum) {
-      maximum = x[i];
+    // Make sure it is not NA
+    if (!NumericVector::is_na(x[i])) {
+      if (x[i] > maximum) {
+        maximum = x[i];
+      }
     }
   }
   return maximum;

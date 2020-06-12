@@ -8,7 +8,7 @@ test_that("Autocart returns sensical output", {
   snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
                 snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0
+  alpha <- 0.85
 
   # Give all missing values the average of non-missing column values
   for (i in 1:ncol(snow)) {

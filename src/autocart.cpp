@@ -21,7 +21,6 @@ NumericVector autocart(NumericVector response, DataFrame data, NumericMatrix loc
   // By default, we will return a vector with the predicted response for each
   // of the observations that was used to create the tree in the first place.
   return myTree.predictDataFrame(data);
-  //return NumericVector::create(0);
 }
 
 // Test creating an R reference to the C++ AutoTree class
