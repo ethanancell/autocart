@@ -15,9 +15,9 @@ test_that("Autocart returns sensical output", {
     snow[is.na(snow[, i]), i] <- mean(snow[, i], na.rm = TRUE)
   }
 
-  predictions <- autocart(response, snow, locations, alpha)
+  model <- autocart(response, snow, locations, alpha)
 
   # TESTING
-  expect_is(predictions, "numeric")
-  expect_equal(length(predictions), length(response))
+  expect_is(model$prediction, "numeric")
+  expect_equal(length(model$prediction), length(response))
 })

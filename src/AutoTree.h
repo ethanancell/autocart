@@ -38,9 +38,9 @@ public:
   AutoTree();
   ~AutoTree();
   void destroyTree();
-
   void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
-  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, double alpha);
+
+  DataFrame createSplitDataFrame();
 
   double predictObservation(NumericVector predictors);
   NumericVector predictDataFrame(DataFrame data);
@@ -48,10 +48,13 @@ public:
 private:
   node* root;
   int obsToCreate = 0; // The number of observations in DataFrame used to create tree
+  int nodesInTree = 0;
 
   void destroyTree(node* leaf);
 
   node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
+
+  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, double alpha);
 
   void inorderPrint();
   void inorderPrint(node* leaf, int level);

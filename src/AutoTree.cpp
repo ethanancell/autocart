@@ -48,6 +48,32 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       stop("Creation of autotree failed. Alpha value not between 0 and 1.");
     }
 
+    // Check to see if any NA, NaN, or Inf exists
+    // ------------------------------------------
+    // Check response
+    for (int i=0; i<response.size(); i++) {
+      if (NumericVector::is_na(response[i])) {
+        stop("NA found in response vector. Consider imputation or removing rows with NA values.");
+      }
+    }
+
+    // Check DataFrame
+    for (int j=0; j<data.length(); j++) {
+
+      // Error check to make sure it's all numeric vectors
+      if (TYPEOF(data[j]) != REALSXP && TYPEOF(data[j]) != INTSXP) {
+        Rcout << "Column " << j << " supposed to be " << REALSXP << ", but was actually " << TYPEOF(data[j]) << std::endl;
+        stop("All dataframe columns must be numeric vectors.");
+      }
+
+      NumericVector temp = data[j];
+      for (int i=0; i<temp.size(); i++) {
+        if (NumericVector::is_na(temp[i])) {
+          stop("NA found in dataframe. Consider imputation or removing rows with NA values.");
+        }
+      }
+    }
+
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
     obsToCreate = response.size();
@@ -70,6 +96,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     root = createNode(response, data, locations, alpha, 0, response.size());
 
     treeCreationStack.push(root);
+    nodesInTree++;
     while (!treeCreationStack.empty()) {
       // Take the node off the stack and try to assign its children
       node* nextNode = treeCreationStack.top();
@@ -107,6 +134,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 
         treeCreationStack.push(leftnode);
         treeCreationStack.push(rightnode);
+        nodesInTree += 2;
       }
       else {
         nextNode->isTerminalNode = true;
@@ -118,7 +146,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     // preorderPrint();
   }
   else {
-    stop("Trying to create an autotree when a root node already exists!");
+    stop("A tree has already been created with this C++ object!");
   }
 }
 
@@ -309,6 +337,77 @@ double AutoTree::predictObservation(NumericVector predictors) {
   // When we have landed on the terminal node, we can return the prediction
   // contained in that terminal node.
   return iterNode->prediction;
+}
+
+/* After the tree has been created, we often wish to create new predictions
+ * from observations that were not used in the creation of the tree.
+ * In order for this to be accessed in the R environment, we require an S3
+ * object. This function creates the dataframe that contains the splitting
+ * information so that new predictions can be obtained.
+ *
+ * column: The index of the column that is being split on
+ * splitvalue: If <= splitvalue, go left in tree. If > splitvalue, go right.
+ * leftloc: The row in the dataframe to jump to if <= splitvalue
+ * rightloc: The row in the dataframe to jump to if > splitvalue
+ * isterminal: A boolean for if this is a leaf node or not
+ * prediction: The prediction for an observation that lands in this node.
+ */
+DataFrame AutoTree::createSplitDataFrame() {
+
+  // Error check
+  if (root == NULL) {
+    stop("No tree exists. Impossible to create the splitting dataframe.");
+  }
+
+  // These vectors will make up the columns in the splitting dataframe
+  IntegerVector column(nodesInTree);
+  NumericVector splitvalue(nodesInTree);
+  LogicalVector isterminal(nodesInTree);
+  NumericVector prediction(nodesInTree);
+  IntegerVector leftloc(nodesInTree, -1);
+  IntegerVector rightloc(nodesInTree, -1);
+
+  // Create the splitting dataframe using a stack
+  std::stack<node*> dfCreationStack;
+  std::stack<int> rowLocations;
+  int row = 0;
+  dfCreationStack.push(root);
+  rowLocations.push(row);
+
+  while (!dfCreationStack.empty()) {
+    // Take the node off the stack and add an element to the vectors above
+    node* nextNode = dfCreationStack.top();
+    dfCreationStack.pop();
+
+    // Tells you what row in the dataframe this node will be sent to
+    int thisRow = rowLocations.top();
+    rowLocations.pop();
+
+    // Send information in the node to the dataframe
+    column[thisRow] = nextNode->column;
+    splitvalue[thisRow] = nextNode->key;
+    isterminal[thisRow] = nextNode->isTerminalNode;
+    prediction[thisRow] = nextNode->prediction;
+
+    // Push the children if they exist and add to the left/right locations
+    if (nextNode->left != NULL && nextNode->right != NULL) {
+      // Left
+      row++;
+      dfCreationStack.push(nextNode->left);
+      rowLocations.push(row);
+      leftloc[thisRow] = row;
+
+      // Right
+      row++;
+      dfCreationStack.push(nextNode->right);
+      rowLocations.push(row);
+      rightloc[thisRow] = row;
+    }
+  }
+
+  // Construct the final dataframe from the vectors
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["isterminal"] = isterminal, _["prediction"] = prediction);
+  return splitDataFrame;
 }
 
 /*

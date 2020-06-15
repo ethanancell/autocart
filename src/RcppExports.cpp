@@ -6,7 +6,7 @@
 using namespace Rcpp;
 
 // autocart
-NumericVector autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
+List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
 RcppExport SEXP _autocart_autocart(SEXP responseSEXP, SEXP dataSEXP, SEXP locationsSEXP, SEXP alphaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
