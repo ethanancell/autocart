@@ -22,7 +22,7 @@ double euclidDistance(double x1, double y1, double x2, double y2) {
  * assume that the locations matrix contains points that have already been
  * projected.
  */
-NumericMatrix getInvWeights(NumericMatrix locations) {
+NumericMatrix getInvWeights(NumericMatrix locations, int power) {
   // First get a matrix with the distances from all points to all other points
   int matrixSize = locations.rows();
   NumericMatrix invDist(matrixSize, matrixSize);
@@ -34,6 +34,11 @@ NumericMatrix getInvWeights(NumericMatrix locations) {
       double x2 = locations(j, 0);
       double y2 = locations(j, 1);
       invDist(i, j) = euclidDistance(x1, y1, x2, y2);
+
+      // Add optional power
+      if (power != 1) {
+        invDist(i, j) = pow(invDist(i, j), power);
+      }
 
       // Avoid a divide by zero error by only inverting when i != j.
       if (i != j) {

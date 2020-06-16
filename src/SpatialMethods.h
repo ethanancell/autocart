@@ -6,6 +6,6 @@ using namespace Rcpp;
 
 double euclidDistance(double x1, double y1, double x2, double y2);
 double moranI(NumericVector response, NumericMatrix weights);
-NumericMatrix getInvWeights(NumericMatrix locations);
+NumericMatrix getInvWeights(NumericMatrix locations, int power);
 
 #endif

@@ -12,3 +12,12 @@ autocart <- function(response, data, locations, alpha) {
     .Call(`_autocart_autocart`, response, data, locations, alpha)
 }
 
+#' Given an autocart model object, predict for new data passed in
+#'
+#' @param autocartModel An S3 object of type "autocart" returned from the autocart function
+#' @param newdata A dataframe with the same amount of columns used to create the autocart model.
+#' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
+predictAutocart <- function(autocartModel, newdata) {
+    .Call(`_autocart_predictAutocart`, autocartModel, newdata)
+}
+

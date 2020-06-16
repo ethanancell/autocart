@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{autocart}
 \alias{autocart}
-\title{Return the numeric vector of predictions from an autocart tree.}
+\title{Create an autocart model}
 \usage{
 autocart(response, data, locations, alpha)
 }
@@ -16,8 +16,8 @@ autocart(response, data, locations, alpha)
 \item{alpha}{A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.}
 }
 \value{
-A predicted response value for each of the dataframe observations that were used to create the tree.
+An S3 object of class "autocart".
 }
 \description{
-Return the numeric vector of predictions from an autocart tree.
+Create an autocart model
 }

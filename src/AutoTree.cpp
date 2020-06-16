@@ -62,7 +62,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 
       // Error check to make sure it's all numeric vectors
       if (TYPEOF(data[j]) != REALSXP && TYPEOF(data[j]) != INTSXP) {
-        Rcout << "Column " << j << " supposed to be " << REALSXP << ", but was actually " << TYPEOF(data[j]) << std::endl;
+        //Rcout << "Column " << j << " supposed to be " << REALSXP << ", but was actually " << TYPEOF(data[j]) << std::endl;
         stop("All dataframe columns must be numeric vectors.");
       }
 
@@ -282,7 +282,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
       // leave it at the default value of 0)
       if (splitLocation != 0) {
-        NumericMatrix weightsE1 = getInvWeights(e1);
+        NumericMatrix weightsE1 = getInvWeights(e1, 1);
         double mi = moranI(y1, weightsE1);
 
         // Scale so that it fits between 0 and 1
@@ -293,7 +293,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       // E2
       // (As in E2, skip over splitLocation == n-2 where only one observation exists)
       if (splitLocation != n-2) {
-        NumericMatrix weightsE2 = getInvWeights(e2);
+        NumericMatrix weightsE2 = getInvWeights(e2, 1);
         double mi = moranI(y2, weightsE2);
 
         // Scale to [0, 1]
@@ -391,17 +391,20 @@ DataFrame AutoTree::createSplitDataFrame() {
 
     // Push the children if they exist and add to the left/right locations
     if (nextNode->left != NULL && nextNode->right != NULL) {
+      // For both left and right sides, we use row+1 instead of row because
+      // R is 1-indexed rather than 0-indexed
+      // ------------------------------------
       // Left
       row++;
       dfCreationStack.push(nextNode->left);
       rowLocations.push(row);
-      leftloc[thisRow] = row;
+      leftloc[thisRow] = row+1;
 
       // Right
       row++;
       dfCreationStack.push(nextNode->right);
       rowLocations.push(row);
-      rightloc[thisRow] = row;
+      rightloc[thisRow] = row+1;
     }
   }
 

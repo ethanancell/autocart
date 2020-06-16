@@ -19,9 +19,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// predictAutocart
+NumericVector predictAutocart(List autocartModel, DataFrame newdata);
+RcppExport SEXP _autocart_predictAutocart(SEXP autocartModelSEXP, SEXP newdataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type autocartModel(autocartModelSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type newdata(newdataSEXP);
+    rcpp_result_gen = Rcpp::wrap(predictAutocart(autocartModel, newdata));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_autocart_autocart", (DL_FUNC) &_autocart_autocart, 4},
+    {"_autocart_predictAutocart", (DL_FUNC) &_autocart_predictAutocart, 2},
     {NULL, NULL, 0}
 };
 
