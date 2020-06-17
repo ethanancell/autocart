@@ -11,11 +11,13 @@ using namespace Rcpp;
  * then go left.
  */
 struct node {
-  int key;
+  double key;
+  int factor;
   int column;
   int obsInNode;
   double prediction;
   bool isTerminalNode;
+  bool isCategoricalSplit;
 
   // Pointers to the data in this node
   NumericVector response;
@@ -55,6 +57,7 @@ private:
   node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
 
   NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, double alpha);
+  NumericVector splitCategorical(NumericVector response, IntegerVector x, NumericMatrix locations, double alpha);
 
   void inorderPrint();
   void inorderPrint(node* leaf, int level);

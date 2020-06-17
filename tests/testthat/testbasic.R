@@ -10,9 +10,21 @@ test_that("Autocart returns sensical output", {
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
   alpha <- 0.85
 
+  # Try with factor prediction. Delete this section after testing as it is a selection of conjured variables.
+  # Random factor test: factor_column <- rep(c("zz", "zz", "yy", "aa", "bb", "zz", "yy"), length = nrow(snow))
+  factor_column <- rep(NA, nrow(snow))
+  factor_column[response <= quantile(response)[2]] <- "aa"
+  factor_column[response > quantile(response)[2] & response <= quantile(response)[3]] <- "bb"
+  factor_column[response > quantile(response)[3]] <- "cc"
+  factor_column <- as.factor(factor_column)
+  snow <- cbind(snow, factor_column)
+
   # Give all missing values the average of non-missing column values
   for (i in 1:ncol(snow)) {
-    snow[is.na(snow[, i]), i] <- mean(snow[, i], na.rm = TRUE)
+    # Only can take average if it's a numeric column
+    if (is.numeric(snow[, i])) {
+      snow[is.na(snow[, i]), i] <- mean(snow[, i], na.rm = TRUE)
+    }
   }
 
   model <- autocart(response, snow, locations, alpha)

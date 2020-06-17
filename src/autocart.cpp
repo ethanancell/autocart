@@ -43,7 +43,7 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
   for (int j=0; j<newdata.length(); j++) {
     // Make sure all numeric
     if (TYPEOF(newdata[j]) != REALSXP && TYPEOF(newdata[j]) != INTSXP) {
-      stop("To predict, all dataframe columns must be numeric vectors.");
+      stop("To predict, all dataframe columns must be numeric vectors or factors.");
     }
 
     // Make sure no NAs exist
@@ -62,9 +62,11 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
   // at every step anyway
   IntegerVector column = splitFrame["column"];
   NumericVector splitValue = splitFrame["splitvalue"];
+  IntegerVector category = splitFrame["category"];
   IntegerVector leftLoc = splitFrame["leftloc"];
   IntegerVector rightLoc = splitFrame["rightloc"];
   LogicalVector isTerminal = splitFrame["isterminal"];
+  LogicalVector isCategorical = splitFrame["iscategorical"];
   NumericVector prediction = splitFrame["prediction"];
 
   // For each row in the passed in dataframe, append a prediction to the predictionVector
@@ -74,21 +76,43 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
     // Run until the row in the split DataFrame is a terminal node, at which
     // point you can return the prediction for that node
     while (!isTerminal[splittingRow]) {
-      double compareValue = splitValue[splittingRow];
+      // Make split depending on if categorical or not
+      if (isCategorical[splittingRow]) {
+        int compareFactor = category[splittingRow];
 
-      // Get the value in newdata to compare to the above
-      NumericVector newdataSplitColumn = newdata[column[splittingRow]];
-      double myValue = newdataSplitColumn[row];
+        // Get the value in newdata to compare to the above
+        IntegerVector newdataSplitColumn = newdata[column[splittingRow]];
+        int myFactor = newdataSplitColumn[row];
 
-      // For both directions, we subtract one from what's stored in
-      // leftloc/rightloc as C++ is 0-indexed
-      if (myValue <= compareValue) {
-        // Go left
-        splittingRow = leftLoc[splittingRow] - 1;
+        // For both directions, subtract 1 from what's store in leftloc/rightloc
+        // as C++ is 0-indexed
+        if (myFactor == compareFactor) {
+          // Go right
+          splittingRow = rightLoc[splittingRow] - 1;
+        }
+        else {
+          // Go left
+          splittingRow = leftLoc[splittingRow] - 1;
+        }
       }
+      // Continuous
       else {
-        // Go right
-        splittingRow = rightLoc[splittingRow] - 1;
+        double compareValue = splitValue[splittingRow];
+
+        // Get the value in newdata to compare to the above
+        NumericVector newdataSplitColumn = newdata[column[splittingRow]];
+        double myValue = newdataSplitColumn[row];
+
+        // For both directions, we subtract one from what's stored in
+        // leftloc/rightloc as C++ is 0-indexed
+        if (myValue <= compareValue) {
+          // Go left
+          splittingRow = leftLoc[splittingRow] - 1;
+        }
+        else {
+          // Go right
+          splittingRow = rightLoc[splittingRow] - 1;
+        }
       }
     }
 
@@ -98,5 +122,4 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
   }
 
   return predictionVector;
-
 }
