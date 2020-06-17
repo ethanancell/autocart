@@ -10,18 +10,48 @@ using namespace Rcpp;
 //' @param data A dataframe for the predictor variables used in the autocart tree.
 //' @param locations A two-column matrix with coordinates for the observations the predictor dataframe.
 //' @param alpha A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.
+//' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 //' @return An S3 object of class "autocart".
 // [[Rcpp::export]]
-List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
+List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
   AutoTree tree;
-  tree.createTree(response, data, locations, alpha);
+
+  // Default values for splitting parameters
+  int minsplit = 20;
+  int minbucket = 7;
+  //int xval = 10;
+  int maxdepth = 30;
+
+  // If there is a passed in autocartControl object, then modify the behavior of the splitting.
+  if (control.isNotNull()) {
+    List autocartControl = as<List>(control);
+    // Make sure it inherits the autocartControl class
+    if (!autocartControl.inherits("autocartControl")) {
+      stop("The control parameter to autocart must be an object of type \"autocartControl\". This can be obtained from the autocartControl function.");
+    }
+
+    minsplit = as<int>(autocartControl["minsplit"]);
+    minbucket = as<int>(autocartControl["minbucket"]);
+    //xval = as<int>(autocartControl["xval"]);
+    maxdepth = as<int>(autocartControl["maxdepth"]);
+
+    // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
+    // the code will crash.
+    if (minbucket >= minsplit / 2) {
+      stop("The minbucket parameter should not be above half of minsplit.");
+    }
+  }
+
+  // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
+  tree.createTree(response, data, locations, alpha, minsplit, minbucket, maxdepth);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth);
 
   // Construct the S3 object that contains information about the model
-  List autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe);
+  List autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe, _["splitparams"] = splitparams);
   autocartModel.attr("class") = "autocart";
 
   return autocartModel;

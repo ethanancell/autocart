@@ -6,8 +6,8 @@
 using namespace Rcpp;
 
 // autocart
-List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
-RcppExport SEXP _autocart_autocart(SEXP responseSEXP, SEXP dataSEXP, SEXP locationsSEXP, SEXP alphaSEXP) {
+List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, Rcpp::Nullable<Rcpp::List> control);
+RcppExport SEXP _autocart_autocart(SEXP responseSEXP, SEXP dataSEXP, SEXP locationsSEXP, SEXP alphaSEXP, SEXP controlSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -15,7 +15,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< DataFrame >::type data(dataSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type locations(locationsSEXP);
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
-    rcpp_result_gen = Rcpp::wrap(autocart(response, data, locations, alpha));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type control(controlSEXP);
+    rcpp_result_gen = Rcpp::wrap(autocart(response, data, locations, alpha, control));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -33,7 +34,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_autocart_autocart", (DL_FUNC) &_autocart_autocart, 4},
+    {"_autocart_autocart", (DL_FUNC) &_autocart_autocart, 5},
     {"_autocart_predictAutocart", (DL_FUNC) &_autocart_predictAutocart, 2},
     {NULL, NULL, 0}
 };

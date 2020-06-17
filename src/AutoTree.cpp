@@ -32,7 +32,7 @@ AutoTree::AutoTree() {
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -67,18 +67,6 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
         stop("All dataframe columns must be numeric vectors or factors.");
       }
 
-      // Document columns which are factors
-      /*
-      if (TYPEOF(data[j]) == INTSXP) {
-        IntegerVector thisColumn = data[j];
-        if (Rf_isFactor(thisColumn)) {
-          CharacterVector ch = thisColumn.attr("levels");
-          Rcout << "Found a factor at column " << j << std::endl;
-          Rf_PrintValue(ch);
-        }
-      }
-      */
-
       NumericVector temp = data[j];
       for (int i=0; i<temp.size(); i++) {
         if (NumericVector::is_na(temp[i])) {
@@ -86,6 +74,11 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
         }
       }
     }
+
+    // Set the autocart control parameters
+    minsplit = minsplit_;
+    minbucket = minbucket_;
+    maxdepth = maxdepth_;
 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
@@ -142,8 +135,9 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       node* leftnode = NULL;
       node* rightnode = NULL;
 
-      // If a split occurs here, attempt to create children
-      if (leftResponse.size() > 0 && rightResponse.size() > 0) {
+      // Attempt to create a child if the size of the children is larger than zero, and if the observations
+      // in this current node are larger than "minsplit"
+      if (leftResponse.size() > 0 && rightResponse.size() > 0 && nextNode->obsInNode >= minsplit) {
         leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, 0, leftResponse.size());
         rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, 0, rightResponse.size());
       }
@@ -175,16 +169,31 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 // Recursive splitting function
 node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs) {
   // Stopping criteria based on height of the tree
+  /*
   if (numObs < sqrt(obsToCreate)) {
     return NULL;
   }
+  */
+
+  if (numObs < sqrt(obsToCreate)) {
+    return NULL;
+  }
+
+  // Stop if we have maxdepth or less than the minimum observations allowed in the tree
+  if (level > maxdepth) {
+    return NULL;
+  }
+  /*
+  if (numObs < minbucket) {
+    return NULL;
+  }
+  */
 
   // Loop through all the columns, finding the best split
   int bestColumn = 0;
   int bestSplit = 0;
   double maxGoodness = 0;
   bool betterSplitFound = false;
-  // Categorical stuff
   bool bestSplitIsCategorical = false;
 
   for (int column=0; column<data.length(); column++) {
@@ -308,6 +317,13 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
 
   NumericVector t1 = (leftWt*pow(lMean, 2) + rightWt*pow(rMean, 2)) / sum(wt * pow(y, 2));
 
+  // Using the minbucket parameter, we can set the first minbucket and last minbucket number
+  // of observations in t1 to be 0 so that those splits are not chosen.
+  for (int i=0; i<minbucket-1; i++) {
+    t1[i] = 0;
+    t1[n-i-2] = 0;
+  }
+
   /* Calculate Moran's I statistic for each of the two halves
    * The portion of the "goodness" value that is represented by the
    * statistic of spatial autocorrelation will be known as "t2"
@@ -329,7 +345,11 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       orderedLocations(slotLocation, _) = locations(i, _);
     }
 
-    for (int splitLocation=0; splitLocation<n-1; splitLocation++) {
+    // Using the minbucket parameter, we can only calculate the splits which start at
+    // "minbucket-1", and then only calculate up to "n-minbucket"
+    // By leaving everything at 0 elsewhere, we guarantee those splits are never chosen.
+    //for (int splitLocation = 0; splitLocation < n-1; splitLocation++) {
+    for (int splitLocation = minbucket-1; splitLocation < n-minbucket; splitLocation++) {
       // Get the E1 and E2 partitions
       NumericMatrix e1 = orderedLocations(Range(0, splitLocation), Rcpp::Range(0, 1));
       NumericMatrix e2 = orderedLocations(Range(splitLocation+1, n), Rcpp::Range(0, 1));
@@ -403,18 +423,22 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
    // and right (that factor), then calculate the goodness for each of those
    // splits. (Calculated with SSB / TSS)
    for (int i=0; i<numLevels; i++) {
-     // Calculate the mean of the non-factor group
-     double nonFactorMean = 0.0;
-     double totalNonFactorWeights = 0.0;
-     for (int j=0; j<numLevels; j++) {
-       if (j != i) {
-         totalNonFactorWeights += wtSum[j];
-         nonFactorMean += wtSum[j] * means[j];
+     // Only calculate a number for t1 if the number of items with that factor
+     // is at least as big as minbucket
+     if (wtSum[i] >= minbucket) {
+       // Calculate the mean of the non-factor group
+       double nonFactorMean = 0.0;
+       double totalNonFactorWeights = 0.0;
+       for (int j=0; j<numLevels; j++) {
+         if (j != i) {
+           totalNonFactorWeights += wtSum[j];
+           nonFactorMean += wtSum[j] * means[j];
+         }
        }
+       nonFactorMean /= totalNonFactorWeights;
+       t1[i] = (totalNonFactorWeights * pow(nonFactorMean, 2)) + (wtSum[i] * pow(means[i], 2));
+       t1[i] /= sum(wt * pow(y, 2));
      }
-     nonFactorMean /= totalNonFactorWeights;
-     t1[i] = (totalNonFactorWeights * pow(nonFactorMean, 2)) + (wtSum[i] * pow(means[i], 2));
-     t1[i] /= sum(wt * pow(y, 2));
    }
 
    /* Calculate Moran's I statistic for each of the two halves
@@ -427,54 +451,58 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
    // the computational energy for this section.
    if (alpha >= 0) {
      for (int factorLevel = 0; factorLevel < numLevels; factorLevel++) {
-       // Create E1 and E2 partitions by using the indices of the factor levels
-       LogicalVector factorIndices = (x == (factorLevel+1));
+       // Only calculate this if the number of observations in the factor level
+       // is bigger than minbucket
+       if (wtSum[factorLevel] >= minbucket) {
+         // Create E1 and E2 partitions by using the indices of the factor levels
+         LogicalVector factorIndices = (x == (factorLevel+1));
 
-       // Create the e1 and e2 Numeric matrices, as the subsetting with factorIndices does
-       // not work at all since it is a logical vector..... :(
-       NumericMatrix e1(wtSum[factorLevel], 2);
-       NumericMatrix e2(n - wtSum[factorLevel], 2);
-       int e1n = 0;
-       int e2n = 0;
-       for (int i=0; i<n; i++) {
-         if (factorIndices[i]) {
-           e1(e1n, _) = locations(i, _);
-           e1n++;
+         // Create the e1 and e2 Numeric matrices, as the subsetting with factorIndices does
+         // not work at all since it is a logical vector..... :(
+         NumericMatrix e1(wtSum[factorLevel], 2);
+         NumericMatrix e2(n - wtSum[factorLevel], 2);
+         int e1n = 0;
+         int e2n = 0;
+         for (int i=0; i<n; i++) {
+           if (factorIndices[i]) {
+             e1(e1n, _) = locations(i, _);
+             e1n++;
+           }
+           else {
+             e2(e2n, _) = locations(i, _);
+             e2n++;
+           }
          }
-         else {
-           e2(e2n, _) = locations(i, _);
-           e2n++;
+         NumericVector y1 = response[factorIndices];
+         NumericVector y2 = response[!factorIndices];
+
+         // INFO:
+         // wtSum[factorLevel] = the number of observations in this factor
+         // (n - wtSum[factorLevel]) = the number of observations not in the factor
+
+         // E1
+         // Skip if only one observation with this factor
+         if (wtSum[factorLevel] > 1.0) {
+           NumericMatrix weightsE1 = getInvWeights(e1, 1);
+           double mi = moranI(y1, weightsE1);
+
+           // Scale to [0, 1]
+           mi = (mi + 1.0) / 2.0;
+           t2[factorLevel] = mi * (wtSum[factorLevel]);
          }
+
+         // E2
+         if ((n - wtSum[factorLevel]) > 1.0) {
+           NumericMatrix weightsE2 = getInvWeights(e2, 1);
+           double mi = moranI(y2, weightsE2);
+
+           // Scale to [0, 1]
+           mi = (mi + 1.0) / 2.0;
+           t2[factorLevel] += (mi * (n - wtSum[factorLevel]));
+         }
+
+         t2[factorLevel] /= n;
        }
-       NumericVector y1 = response[factorIndices];
-       NumericVector y2 = response[!factorIndices];
-
-       // INFO:
-       // wtSum[factorLevel] = the number of observations in this factor
-       // (n - wtSum[factorLevel]) = the number of observations not in the factor
-
-       // E1
-       // Skip if only one observation with this factor
-       if (wtSum[factorLevel] > 1.0) {
-         NumericMatrix weightsE1 = getInvWeights(e1, 1);
-         double mi = moranI(y1, weightsE1);
-
-         // Scale to [0, 1]
-         mi = (mi + 1.0) / 2.0;
-         t2[factorLevel] = mi * (wtSum[factorLevel]);
-       }
-
-       // E2
-       if ((n - wtSum[factorLevel]) > 1.0) {
-         NumericMatrix weightsE2 = getInvWeights(e2, 1);
-         double mi = moranI(y2, weightsE2);
-
-         // Scale to [0, 1]
-         mi = (mi + 1.0) / 2.0;
-         t2[factorLevel] += (mi * (n - wtSum[factorLevel]));
-       }
-
-       t2[factorLevel] /= n;
      }
    }
 
@@ -569,6 +597,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   IntegerVector column(nodesInTree);
   NumericVector splitvalue(nodesInTree);
   IntegerVector category(nodesInTree);
+  IntegerVector numobs(nodesInTree);
   LogicalVector isterminal(nodesInTree);
   LogicalVector iscategorical(nodesInTree);
   NumericVector prediction(nodesInTree);
@@ -595,6 +624,7 @@ DataFrame AutoTree::createSplitDataFrame() {
     column[thisRow] = nextNode->column;
     splitvalue[thisRow] = nextNode->key;
     category[thisRow] = nextNode->factor;
+    numobs[thisRow] = nextNode->obsInNode;
     isterminal[thisRow] = nextNode->isTerminalNode;
     prediction[thisRow] = nextNode->prediction;
     iscategorical[thisRow] = nextNode->isCategoricalSplit;
@@ -619,7 +649,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // Construct the final dataframe from the vectors
-  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction);
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction);
   return splitDataFrame;
 }
 

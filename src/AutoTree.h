@@ -40,7 +40,7 @@ public:
   AutoTree();
   ~AutoTree();
   void destroyTree();
-  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha);
+  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_);
 
   DataFrame createSplitDataFrame();
 
@@ -52,8 +52,12 @@ private:
   int obsToCreate = 0; // The number of observations in DataFrame used to create tree
   int nodesInTree = 0;
 
-  void destroyTree(node* leaf);
+  // autocartControl parameters
+  int minsplit;
+  int minbucket;
+  int maxdepth;
 
+  void destroyTree(node* leaf);
   node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);
 
   NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, double alpha);
