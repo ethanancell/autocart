@@ -27,6 +27,12 @@ test_that("Autocart returns sensical output", {
     }
   }
 
+  # For the sake of a timely test run so that CRAN will like it, let's just cut the data in half.
+  datasize <- round(length(response) / 2)
+  response <- response[1:datasize]
+  snow <- snow[1:datasize, ]
+  locations <- locations[1:datasize, ]
+
   model <- autocart(response, snow, locations, alpha)
 
   # TESTING
