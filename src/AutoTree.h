@@ -40,7 +40,7 @@ public:
   AutoTree();
   ~AutoTree();
   void destroyTree();
-  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_);
+  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_, int distpower_);
 
   DataFrame createSplitDataFrame();
 
@@ -56,6 +56,7 @@ private:
   int minsplit;
   int minbucket;
   int maxdepth;
+  int distpower;
 
   void destroyTree(node* leaf);
   node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs);

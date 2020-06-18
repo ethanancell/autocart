@@ -32,7 +32,7 @@ AutoTree::AutoTree() {
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_, int distpower_) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -79,6 +79,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     minsplit = minsplit_;
     minbucket = minbucket_;
     maxdepth = maxdepth_;
+    distpower = distpower_;
 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
@@ -360,7 +361,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
       // leave it at the default value of 0)
       if (splitLocation != 0) {
-        NumericMatrix weightsE1 = getInvWeights(e1, 1);
+        NumericMatrix weightsE1 = getInvWeights(e1, distpower);
         double mi = moranI(y1, weightsE1);
 
         // Scale so that it fits between 0 and 1
@@ -371,7 +372,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       // E2
       // (As in E2, skip over splitLocation == n-2 where only one observation exists)
       if (splitLocation != n-2) {
-        NumericMatrix weightsE2 = getInvWeights(e2, 1);
+        NumericMatrix weightsE2 = getInvWeights(e2, distpower);
         double mi = moranI(y2, weightsE2);
 
         // Scale to [0, 1]
@@ -483,7 +484,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
          // E1
          // Skip if only one observation with this factor
          if (wtSum[factorLevel] > 1.0) {
-           NumericMatrix weightsE1 = getInvWeights(e1, 1);
+           NumericMatrix weightsE1 = getInvWeights(e1, distpower);
            double mi = moranI(y1, weightsE1);
 
            // Scale to [0, 1]
@@ -493,7 +494,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
 
          // E2
          if ((n - wtSum[factorLevel]) > 1.0) {
-           NumericMatrix weightsE2 = getInvWeights(e2, 1);
+           NumericMatrix weightsE2 = getInvWeights(e2, distpower);
            double mi = moranI(y2, weightsE2);
 
            // Scale to [0, 1]

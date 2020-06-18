@@ -4,7 +4,7 @@
 #' @param minbucket The minimum number of observations in a terminal node.
 #' @param maxdepth Set the maximum depth in the final tree. A root node is counted as a height of 0.
 #' @return An object passed in to the \code{autocart} function that controls the splitting
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30) {
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1) {
 
   # Make sure the user passed in valid input
   #if (typeof(minsplit) != "numeric" & typeof(minsplit) != "integer") {
@@ -28,11 +28,13 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   minsplit = as.integer(minsplit)
   minbucket = as.integer(minbucket)
   maxdepth = as.integer(maxdepth)
+  distpower = as.integer(distpower)
 
   control <- list(
     minsplit = minsplit,
     minbucket = minbucket,
-    maxdepth = maxdepth
+    maxdepth = maxdepth,
+    distpower = distpower
   )
 
   # Set the name for the control object

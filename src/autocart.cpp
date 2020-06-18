@@ -21,6 +21,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int minbucket = 7;
   //int xval = 10;
   int maxdepth = 30;
+  int distpower = 1;
 
   // If there is a passed in autocartControl object, then modify the behavior of the splitting.
   if (control.isNotNull()) {
@@ -34,6 +35,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     minbucket = as<int>(autocartControl["minbucket"]);
     //xval = as<int>(autocartControl["xval"]);
     maxdepth = as<int>(autocartControl["maxdepth"]);
+    distpower = as<int>(autocartControl["distpower"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -43,7 +45,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  tree.createTree(response, data, locations, alpha, minsplit, minbucket, maxdepth);
+  tree.createTree(response, data, locations, alpha, minsplit, minbucket, maxdepth, distpower);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
