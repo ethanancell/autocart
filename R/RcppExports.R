@@ -9,8 +9,8 @@
 #' @param alpha A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.
 #' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 #' @return An S3 object of class "autocart".
-autocart <- function(response, data, locations, alpha, control = NULL) {
-    .Call(`_autocart_autocart`, response, data, locations, alpha, control)
+autocart <- function(response, data, locations, alpha, beta, control = NULL) {
+    .Call(`_autocart_autocart`, response, data, locations, alpha, beta, control)
 }
 
 #' Given an autocart model object, predict for new data passed in

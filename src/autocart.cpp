@@ -13,7 +13,7 @@ using namespace Rcpp;
 //' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 //' @return An S3 object of class "autocart".
 // [[Rcpp::export]]
-List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
+List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
   AutoTree tree;
 
   // Default values for splitting parameters
@@ -45,12 +45,12 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  tree.createTree(response, data, locations, alpha, minsplit, minbucket, maxdepth, distpower);
+  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower);
 
   // Construct the S3 object that contains information about the model
   List autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe, _["splitparams"] = splitparams);

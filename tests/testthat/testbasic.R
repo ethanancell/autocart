@@ -8,7 +8,8 @@ test_that("Autocart returns sensical output", {
   snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
                 snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0.85
+  alpha <- 0.80
+  beta <- 0.10
 
   # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
   # response so that the test ensures that factors can be used.
@@ -33,7 +34,7 @@ test_that("Autocart returns sensical output", {
   snow <- snow[1:datasize, ]
   locations <- locations[1:datasize, ]
 
-  model <- autocart(response, snow, locations, alpha)
+  model <- autocart(response, snow, locations, alpha, beta, autocartControl(distpower=2))
 
   # TESTING
   expect_is(model$prediction, "numeric")
@@ -69,7 +70,7 @@ test_that("Cross-validation with autocart is possible", {
     test_loc <- locations[xvs == k, ]
 
     # Create the model based off the test dataset
-    trained_model <- autocart(train_y, train, train_loc, 0)
+    trained_model <- autocart(train_y, train, train_loc, 0, 0)
 
     pred[xvs == k] <- predictAutocart(trained_model, test)
   }
@@ -86,6 +87,7 @@ test_that("autocartControl controls the tree correctly", {
                      snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
   alpha <- 0
+  beta <- 0
 
   # Give all missing values the average of non-missing column values
   for (i in 1:ncol(snow)) {
@@ -99,9 +101,10 @@ test_that("autocartControl controls the tree correctly", {
   ms <- 35
   mb <- 9
   md <- 5
+  dpower <- 2
 
-  my_control <- autocartControl(minsplit = ms, minbucket = mb, maxdepth = md)
-  model <- autocart(response, snow, locations, alpha, my_control)
+  my_control <- autocartControl(minsplit = ms, minbucket = mb, maxdepth = md, distpower = dpower)
+  model2 <- autocart(response, snow, locations, alpha, beta, my_control)
 
   # TESTING
   splitframe <- model$splitframe

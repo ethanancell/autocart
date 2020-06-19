@@ -24,6 +24,7 @@
 #include <bits/stdc++.h>
 #include "AutoTree.h"
 #include "SpatialMethods.h"
+#include "SplittingMethods.h"
 
 using namespace Rcpp;
 
@@ -32,7 +33,7 @@ AutoTree::AutoTree() {
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int minsplit_, int minbucket_, int maxdepth_, int distpower_) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -46,6 +47,12 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     }
     if (alpha < 0 || alpha > 1) {
       stop("Creation of autotree failed. Alpha value not between 0 and 1.");
+    }
+    if (beta < 0 || beta > 1) {
+      stop("Creation of autotree failed. Beta value not between 0 and 1.");
+    }
+    if (alpha + beta > 1) {
+      stop("Creation of autotree failed. Alpha and beta can not sum to anything above 1.");
     }
 
     // Check to see if any NA, NaN, or Inf exists
@@ -101,7 +108,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 
     // Create tree non-recursively using a stack
     std::stack<node*> treeCreationStack;
-    root = createNode(response, data, locations, alpha, 0, response.size());
+    root = createNode(response, data, locations, alpha, beta, 0, response.size());
 
     treeCreationStack.push(root);
     nodesInTree++;
@@ -139,8 +146,8 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Attempt to create a child if the size of the children is larger than zero, and if the observations
       // in this current node are larger than "minsplit"
       if (leftResponse.size() > 0 && rightResponse.size() > 0 && nextNode->obsInNode >= minsplit) {
-        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, 0, leftResponse.size());
-        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, 0, rightResponse.size());
+        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, beta, 0, leftResponse.size());
+        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, beta, 0, rightResponse.size());
       }
 
       if (leftnode != NULL && rightnode != NULL) {
@@ -168,27 +175,20 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 }
 
 // Recursive splitting function
-node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, int level, int numObs) {
+node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int level, int numObs) {
   // Stopping criteria based on height of the tree
   /*
   if (numObs < sqrt(obsToCreate)) {
     return NULL;
   }
   */
-
-  if (numObs < sqrt(obsToCreate)) {
-    return NULL;
-  }
-
   // Stop if we have maxdepth or less than the minimum observations allowed in the tree
   if (level > maxdepth) {
     return NULL;
   }
-  /*
   if (numObs < minbucket) {
     return NULL;
   }
-  */
 
   // Loop through all the columns, finding the best split
   int bestColumn = 0;
@@ -207,11 +207,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     bool splitByCat;
     // The data might be categorical date, in which case we need a different splitting function.
     if (Rf_isFactor(data[column])) {
-      goodnessVector = splitCategorical(response, data[column], locations, alpha);
+      goodnessVector = splitCategorical(response, data[column], locations, alpha, beta);
       splitByCat = true;
     }
     else {
-      goodnessVector = split(response, data[column], locations, alpha);
+      goodnessVector = split(response, data[column], locations, alpha, beta);
       splitByCat = false;
     }
 
@@ -285,232 +285,87 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
  * with goodness values. The goodness value at location "i" evaluates the split
  * from 1:i vs i+1:n, where n is the length of the response/x_vector.
  */
-NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations, double alpha) {
+NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations, double alpha, double beta) {
 
-  // Make copies as to not modify the original vectors
+  int n = response.size();
+  NumericVector wt(n, 1.0);
   NumericVector y = clone(response);
   NumericVector x = clone(x_vector);
-  int n = y.size();
+  NumericMatrix orderedLocations(n, 2);
 
-  // Make a weights vector. This should probably be modified later, but for now
-  // it will be a vector of ones.
-  NumericVector wt(n, 1.0);
+  // The three terms used in the splitting
+  // t1: reduction in variance
+  // t2: spatial autocorrelation
+  // t3: pairwise distances
+  NumericVector t1(n-1, 0.0);
+  NumericVector t2(n-1, 0.0);
+  NumericVector t3(n-1, 0.0);
 
-  // Order everything by x
+  // Order everything by x_vector
   Function f("order");
-  IntegerVector x_order = f(x);
+  IntegerVector x_order = f(x_vector);
   x_order = x_order - 1;
+
   y = y[x_order];
   x = x[x_order];
-
-  // Center y at zero to make calculations simpler
-  y = y - sum(y*wt) / sum(wt);
-
-  // Calculate reduction in variance
-  NumericVector temp = cumsum(y);
-  temp = temp[Rcpp::Range(0, n-2)];
-  NumericVector leftWt = cumsum(wt);
-  leftWt = leftWt[Rcpp::Range(0, n-2)];
-  NumericVector rightWt = sum(wt) - leftWt;
-
-  NumericVector lMean = temp / leftWt;
-  NumericVector rMean = -temp / rightWt;
-
-  NumericVector t1 = (leftWt*pow(lMean, 2) + rightWt*pow(rMean, 2)) / sum(wt * pow(y, 2));
-
-  // Using the minbucket parameter, we can set the first minbucket and last minbucket number
-  // of observations in t1 to be 0 so that those splits are not chosen.
-  for (int i=0; i<minbucket-1; i++) {
-    t1[i] = 0;
-    t1[n-i-2] = 0;
+  for (int i=0; i<n; i++) {
+    int slotLocation = x_order[i];
+    orderedLocations(slotLocation, _) = locations(i, _);
   }
 
-  /* Calculate Moran's I statistic for each of the two halves
-   * The portion of the "goodness" value that is represented by the
-   * statistic of spatial autocorrelation will be known as "t2"
-   */
-  NumericVector t2(n-1, 0.0);
-
-  // If no weighting on t2 is desired (only use reduction in variance), no need to expend
-  // the computational energy for this section.
+  // Only compute non-zero coefficients
+  if ((alpha+beta) < 1) {
+    t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
+  }
   if (alpha > 0) {
-    /* Order the locations matrix rows in the same order as x.
-    * We'll do this by creating a whole new matrix and then copying the rows
-    * of the locations matrix to the new matrix.
-    *
-    * We do already have the IntegerVector x_order which makes this not too bad.
-    */
-    NumericMatrix orderedLocations(n, 2);
-    for (int i=0; i<n; i++) {
-      int slotLocation = x_order[i];
-      orderedLocations(slotLocation, _) = locations(i, _);
-    }
-
-    // Using the minbucket parameter, we can only calculate the splits which start at
-    // "minbucket-1", and then only calculate up to "n-minbucket"
-    // By leaving everything at 0 elsewhere, we guarantee those splits are never chosen.
-    //for (int splitLocation = 0; splitLocation < n-1; splitLocation++) {
-    for (int splitLocation = minbucket-1; splitLocation < n-minbucket; splitLocation++) {
-      // Get the E1 and E2 partitions
-      NumericMatrix e1 = orderedLocations(Range(0, splitLocation), Rcpp::Range(0, 1));
-      NumericMatrix e2 = orderedLocations(Range(splitLocation+1, n), Rcpp::Range(0, 1));
-      NumericVector y1 = response[Range(0, splitLocation)];
-      NumericVector y2 = response[Range(splitLocation+1, n)];
-
-      // E1
-      // (Skip over splitLocation 0 because otherwise Moran's I will fail. Just
-      // leave it at the default value of 0)
-      if (splitLocation != 0) {
-        NumericMatrix weightsE1 = getInvWeights(e1, distpower);
-        double mi = moranI(y1, weightsE1);
-
-        // Scale so that it fits between 0 and 1
-        mi = (mi + 1.0) / 2.0;
-        t2[splitLocation] = mi * (splitLocation + 1);
-      }
-
-      // E2
-      // (As in E2, skip over splitLocation == n-2 where only one observation exists)
-      if (splitLocation != n-2) {
-        NumericMatrix weightsE2 = getInvWeights(e2, distpower);
-        double mi = moranI(y2, weightsE2);
-
-        // Scale to [0, 1]
-        mi = (mi + 1.0) / 2.0;
-        t2[splitLocation] += (mi * (n - splitLocation - 1));
-      }
-
-      t2[splitLocation] /= n;
-    }
+    t2 = continuousGoodnessByMoranI(y, x, orderedLocations, wt, minbucket, distpower);
+  }
+  if (beta > 0) {
+    t3 = continuousGoodnessBySize(x, orderedLocations, wt, minbucket);
   }
 
-  // Return the linear combination of t1 and t2
-  t1 = (1-alpha) * t1;
+  // Return the linear combination of the goodness values
+  t1 = (1-alpha-beta) * t1;
   t2 = alpha * t2;
-  return t1 + t2;
+  t3 = beta * t3;
+  return t1 + t2 + t3;
 }
 
 /* Given an x_vector (predictor), return a vector of length length(levels(x_vector)) (the number of factors)
  * with goodness values. The goodness value at location "i" evaluates the group containing factor i vs
  * the group not containing factor i.
  */
- NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, double alpha) {
+ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, double alpha, double beta) {
 
-   // Make copies as to not modify the original vectors
-   NumericVector y = clone(response);
-   IntegerVector x = clone(x_vector);
-   int n = y.size();
    // Make a weights vector. This should probably be modified later, but for now
    // it will be a vector of ones.
-   NumericVector wt(n, 1.0);
-   // Center y at zero to make calculations simpler
-   y = y - sum(y*wt) / sum(wt);
-
-   CharacterVector lvls = x.attr("levels");
+   NumericVector wt(response.size(), 1.0);
+   CharacterVector lvls = x_vector.attr("levels");
    int numLevels = lvls.size();
 
-   // wtSum = {apple: 2, orange: 4, pineapple: 3}
-   NumericVector wtSum(numLevels);
-   NumericVector ySum(numLevels);
-   for (int i=0; i<n; i++) {
-     wtSum[x[i] - 1] += wt[i];
-     ySum[x[i] - 1] += (wt[i] * y[i]);
-   }
-   NumericVector means = ySum / wtSum;
-
+   // The three terms used in the splitting
+   // t1: reduction in variance
+   // t2: spatial autocorrelation
+   // t3: pairwise distances (size)
    NumericVector t1(numLevels, 0.0);
-
-   // For each factor level, group observations into left (not that factor)
-   // and right (that factor), then calculate the goodness for each of those
-   // splits. (Calculated with SSB / TSS)
-   for (int i=0; i<numLevels; i++) {
-     // Only calculate a number for t1 if the number of items with that factor
-     // is at least as big as minbucket
-     if (wtSum[i] >= minbucket) {
-       // Calculate the mean of the non-factor group
-       double nonFactorMean = 0.0;
-       double totalNonFactorWeights = 0.0;
-       for (int j=0; j<numLevels; j++) {
-         if (j != i) {
-           totalNonFactorWeights += wtSum[j];
-           nonFactorMean += wtSum[j] * means[j];
-         }
-       }
-       nonFactorMean /= totalNonFactorWeights;
-       t1[i] = (totalNonFactorWeights * pow(nonFactorMean, 2)) + (wtSum[i] * pow(means[i], 2));
-       t1[i] /= sum(wt * pow(y, 2));
-     }
-   }
-
-   /* Calculate Moran's I statistic for each of the two halves
-    * The portion of the "goodness" value that is represented by the
-    * statistic of spatial autocorrelation will be known as "t2"
-    */
    NumericVector t2(numLevels, 0.0);
+   NumericVector t3(numLevels, 0.0);
 
-   // If no weighting on t2 is desired (only use reduction in variance), no need to expend
-   // the computational energy for this section.
-   if (alpha >= 0) {
-     for (int factorLevel = 0; factorLevel < numLevels; factorLevel++) {
-       // Only calculate this if the number of observations in the factor level
-       // is bigger than minbucket
-       if (wtSum[factorLevel] >= minbucket) {
-         // Create E1 and E2 partitions by using the indices of the factor levels
-         LogicalVector factorIndices = (x == (factorLevel+1));
-
-         // Create the e1 and e2 Numeric matrices, as the subsetting with factorIndices does
-         // not work at all since it is a logical vector..... :(
-         NumericMatrix e1(wtSum[factorLevel], 2);
-         NumericMatrix e2(n - wtSum[factorLevel], 2);
-         int e1n = 0;
-         int e2n = 0;
-         for (int i=0; i<n; i++) {
-           if (factorIndices[i]) {
-             e1(e1n, _) = locations(i, _);
-             e1n++;
-           }
-           else {
-             e2(e2n, _) = locations(i, _);
-             e2n++;
-           }
-         }
-         NumericVector y1 = response[factorIndices];
-         NumericVector y2 = response[!factorIndices];
-
-         // INFO:
-         // wtSum[factorLevel] = the number of observations in this factor
-         // (n - wtSum[factorLevel]) = the number of observations not in the factor
-
-         // E1
-         // Skip if only one observation with this factor
-         if (wtSum[factorLevel] > 1.0) {
-           NumericMatrix weightsE1 = getInvWeights(e1, distpower);
-           double mi = moranI(y1, weightsE1);
-
-           // Scale to [0, 1]
-           mi = (mi + 1.0) / 2.0;
-           t2[factorLevel] = mi * (wtSum[factorLevel]);
-         }
-
-         // E2
-         if ((n - wtSum[factorLevel]) > 1.0) {
-           NumericMatrix weightsE2 = getInvWeights(e2, distpower);
-           double mi = moranI(y2, weightsE2);
-
-           // Scale to [0, 1]
-           mi = (mi + 1.0) / 2.0;
-           t2[factorLevel] += (mi * (n - wtSum[factorLevel]));
-         }
-
-         t2[factorLevel] /= n;
-       }
-     }
+   if ((alpha+beta) < 1) {
+     t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
+   }
+   if (alpha > 0) {
+     t2 = categoricalGoodnessByMoranI(response, x_vector, locations, wt, minbucket, distpower);
+   }
+   if (beta > 0) {
+     t3 = categoricalGoodnessBySize(x_vector, locations, wt, minbucket);
    }
 
-   // Return the linear combination of t1 and t2
-   t1 = (1-alpha) * t1;
+   // Return the linear combination of goodness values
+   t1 = (1-alpha-beta) * t1;
    t2 = alpha * t2;
-   return t1 + t2;
+   t3 = beta * t3;
+   return t1 + t2 + t3;;
  }
 
 /*

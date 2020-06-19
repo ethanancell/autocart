@@ -10,9 +10,11 @@ Description: An implementation of the classification and regression tree (CART) 
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Imports: Rcpp (>= 1.0.4.6)
+Imports:
+    Rcpp (>= 1.0.4.6),
+    fields
 LinkingTo: Rcpp
-Suggests: 
+Suggests:
     testthat,
     knitr,
     rmarkdown
