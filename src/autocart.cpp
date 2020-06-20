@@ -13,6 +13,7 @@ using namespace Rcpp;
 //' @param beta A scalar value between 0 and 1 to weight the shape of the region in the splitting
 //' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 //' @return An S3 object of class "autocart".
+//' @import fields
 // [[Rcpp::export]]
 List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
   AutoTree tree;
