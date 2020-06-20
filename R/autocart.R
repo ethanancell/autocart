@@ -3,8 +3,10 @@
 #' @param minsplit The minimum observations in a node before a split is attempted
 #' @param minbucket The minimum number of observations in a terminal node.
 #' @param maxdepth Set the maximum depth in the final tree. A root node is counted as a height of 0.
+#' @param distpower The power of inverse distance to use when calculating spatial weights matrix.
+#' @param islonglat Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations
 #' @return An object passed in to the \code{autocart} function that controls the splitting
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1) {
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE) {
 
   # Make sure the user passed in valid input
   #if (typeof(minsplit) != "numeric" & typeof(minsplit) != "integer") {
@@ -29,12 +31,14 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   minbucket = as.integer(minbucket)
   maxdepth = as.integer(maxdepth)
   distpower = as.integer(distpower)
+  islonglat = as.logical(islonglat)
 
   control <- list(
     minsplit = minsplit,
     minbucket = minbucket,
     maxdepth = maxdepth,
-    distpower = distpower
+    distpower = distpower,
+    islonglat = islonglat
   )
 
   # Set the name for the control object

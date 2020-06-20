@@ -2,14 +2,14 @@ context("Checking that autocart successfully creates a model and can predict wit
 library(autocart)
 
 test_that("Autocart returns sensical output", {
-  # Process the dataset to where it can be used by autocart
+  # Process the dataset so it can be used by autocart
   snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
   response <- as.matrix(snow$yr50)
   snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
                 snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0.80
-  beta <- 0.10
+  alpha <- 0.33
+  beta <- 0.33
 
   # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
   # response so that the test ensures that factors can be used.
@@ -104,7 +104,7 @@ test_that("autocartControl controls the tree correctly", {
   dpower <- 2
 
   my_control <- autocartControl(minsplit = ms, minbucket = mb, maxdepth = md, distpower = dpower)
-  model2 <- autocart(response, snow, locations, alpha, beta, my_control)
+  model <- autocart(response, snow, locations, alpha, beta, my_control)
 
   # TESTING
   splitframe <- model$splitframe

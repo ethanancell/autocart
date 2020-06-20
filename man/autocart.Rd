@@ -4,7 +4,7 @@
 \alias{autocart}
 \title{Create an autocart model}
 \usage{
-autocart(response, data, locations, alpha, control = NULL)
+autocart(response, data, locations, alpha, beta, control = NULL)
 }
 \arguments{
 \item{response}{A vector of numeric response values with no NA entries.}
@@ -14,6 +14,8 @@ autocart(response, data, locations, alpha, control = NULL)
 \item{locations}{A two-column matrix with coordinates for the observations the predictor dataframe.}
 
 \item{alpha}{A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.}
+
+\item{beta}{A scalar value between 0 and 1 to weight the shape of the region in the splitting}
 
 \item{control}{An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.}
 }

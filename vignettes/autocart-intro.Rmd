@@ -68,16 +68,28 @@ train_locations <- locations[training_index, ]
 test_locations <- locations[!training_index, ]
 ```
 
-One crucial parameter we pass into autocart is the "alpha" parameter. Inside of the splitting function, we consider both a measure of reduction of variance, as well as a statistic of spatial autocorrelation. We can choose to weight each of the measures different. The alpha value that we pass into the autocart function says how much the splitting function will weight the statistic of spatial autocorrelation (either Moran's I or Geary's C). If we set alpha to 1, then we will only consider autocorrelation in the splitting. If we set alpha to 0, then autocart will function the same as a normal regression tree. For this example, let's set alpha to be 0.70 to give most of the influence to the spatial autocorrelation.
+One crucial parameter we pass into autocart is the "alpha" parameter. Inside of the splitting function, we consider both a measure of reduction of variance, as well as a statistic of spatial autocorrelation. We can choose to weight each of the measures different. The alpha value that we pass into the autocart function says how much the splitting function will weight the statistic of spatial autocorrelation (either Moran's I or Geary's C). If we set alpha to 1, then we will only consider autocorrelation in the splitting. If we set alpha to 0, then autocart will function the same as a normal regression tree. For this example, let's set alpha to be 0.60 to give most of the influence to the spatial autocorrelation.
 
 ```{r}
-alpha <- 0
+alpha <- 0.60
+```
+
+Another parameter we can weight is "beta", which ranges from a scale of 0 to 1. This controls the shape of the regions that are formed. If beta is near 1, then the shapes will be very close together and compact. If beta is 0, then this shape will not be considered in the splitting. If beta is something around 0.20, then small shapes will be encouraged, but another dominant term may take over.
+
+```{r}
+beta <- 0.20
+```
+
+Although the alpha and beta parameters control most of the splitting done by autocart, the user may require a bit more control. The "autocartControl" object was developed for this specifically in mind. There are a variety of parameters that the user can set that autocart will use when making the splits. As an example, let's use inverse distance squared instead of inverse distance when calculating Moran's I in the splitting function.
+
+```{r}
+my_control <- autocartControl(distpower = 2)
 ```
 
 Finally, we can create our model!
 
 ```{r}
-snow_model <- autocart(train_response, train_predictors, train_locations, alpha)
+snow_model <- autocart(train_response, train_predictors, train_locations, alpha, beta, my_control)
 ```
 
 The autocart function returns an S3 object of type "autocart". We can use the "predictAutocart" function to use the object to make predictions for the testing dataset.

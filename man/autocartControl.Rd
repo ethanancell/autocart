@@ -4,7 +4,13 @@
 \alias{autocartControl}
 \title{Create the object used for the controlling of the splits in the autocart model}
 \usage{
-autocartControl(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30)
+autocartControl(
+  minsplit = 20,
+  minbucket = round(minsplit/3),
+  maxdepth = 30,
+  distpower = 1,
+  islonglat = TRUE
+)
 }
 \arguments{
 \item{minsplit}{The minimum observations in a node before a split is attempted}
@@ -12,6 +18,10 @@ autocartControl(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30)
 \item{minbucket}{The minimum number of observations in a terminal node.}
 
 \item{maxdepth}{Set the maximum depth in the final tree. A root node is counted as a height of 0.}
+
+\item{distpower}{The power of inverse distance to use when calculating spatial weights matrix.}
+
+\item{islonglat}{Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations}
 }
 \value{
 An object passed in to the \code{autocart} function that controls the splitting
