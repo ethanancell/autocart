@@ -13,7 +13,9 @@ using namespace Rcpp;
 //' @param beta A scalar value between 0 and 1 to weight the shape of the region in the splitting
 //' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 //' @return An S3 object of class "autocart".
+//'
 //' @import fields
+//' @export
 // [[Rcpp::export]]
 List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
   AutoTree tree;
@@ -25,6 +27,8 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int maxdepth = 30;
   int distpower = 1;
   bool islonglat = true;
+  bool standardizeLoss = true;
+  bool givePredAsFactor = true;
 
   // If there is a passed in autocartControl object, then modify the behavior of the splitting.
   if (control.isNotNull()) {
@@ -40,6 +44,8 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     maxdepth = as<int>(autocartControl["maxdepth"]);
     distpower = as<int>(autocartControl["distpower"]);
     islonglat = as<bool>(autocartControl["islonglat"]);
+    standardizeLoss = as<bool>(autocartControl["standardizeloss"]);
+    givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -49,17 +55,31 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat);
+  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss);
 
+  // If the "givePredAsFactor" is set to true, then convert the prediction vector into a factor and label it from 1 to the number of regions
   // Construct the S3 object that contains information about the model
-  List autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe, _["splitparams"] = splitparams);
-  autocartModel.attr("class") = "autocart";
+  List autocartModel;
+  if (givePredAsFactor) {
 
+    // Convert the prediction vector to a factor and include it in the output of the model
+    NumericVector levs = sort_unique(prediction);
+    IntegerVector predAsFactor = match(prediction, levs);
+    predAsFactor.attr("levels") = as<CharacterVector>(levs);
+    predAsFactor.attr("class") = "factor";
+
+    autocartModel = List::create(_["prediction"] = prediction, _["predAsFactor"] = predAsFactor, _["splitframe"] = splitframe, _["splitparams"] = splitparams);
+  }
+  else {
+    autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe, _["splitparams"] = splitparams);
+  }
+
+  autocartModel.attr("class") = "autocart";
   return autocartModel;
 }
 
@@ -68,6 +88,8 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
 //' @param autocartModel An S3 object of type "autocart" returned from the autocart function
 //' @param newdata A dataframe with the same amount of columns used to create the autocart model.
 //' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
+//'
+//' @export
 // [[Rcpp::export]]
 NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
   // Check to make sure the list is of the correct class

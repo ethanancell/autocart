@@ -33,7 +33,7 @@ AutoTree::AutoTree() {
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -88,6 +88,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     maxdepth = maxdepth_;
     distpower = distpower_;
     islonglat = islonglat_;
+    standardizeLoss = standardizeLoss_;
 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
@@ -163,6 +164,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       }
       else {
         nextNode->isTerminalNode = true;
+        numTerminalNodes++;
       }
     }
 
@@ -325,6 +327,9 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     t3 = continuousGoodnessBySize(x, orderedLocations, wt, minbucket, islonglat);
   }
 
+  // If standardization parameter is set, then for each of {t1, t2, t3}
+  // we'll stretch out the values to fit exactly between
+
   // Return the linear combination of the goodness values
   t1 = (1-alpha-beta) * t1;
   t2 = alpha * t2;
@@ -366,7 +371,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
    t1 = (1-alpha-beta) * t1;
    t2 = alpha * t2;
    t3 = beta * t3;
-   return t1 + t2 + t3;;
+   return t1 + t2 + t3;
  }
 
 /*
@@ -571,6 +576,12 @@ double findMax(NumericVector x) {
     }
   }
   return maximum;
+}
+
+
+// Various getters and setters
+int AutoTree::getNumTerminalNodes() {
+  return numTerminalNodes;
 }
 
 

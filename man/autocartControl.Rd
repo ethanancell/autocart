@@ -9,7 +9,9 @@ autocartControl(
   minbucket = round(minsplit/3),
   maxdepth = 30,
   distpower = 1,
-  islonglat = TRUE
+  islonglat = TRUE,
+  standardizeloss = TRUE,
+  givePredAsFactor = TRUE
 )
 }
 \arguments{
@@ -22,6 +24,10 @@ autocartControl(
 \item{distpower}{The power of inverse distance to use when calculating spatial weights matrix.}
 
 \item{islonglat}{Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations}
+
+\item{standardizeloss}{Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?}
+
+\item{givePredAsFactor}{In the returned autocart model, should the prediction vector also be returned as a factor?}
 }
 \value{
 An object passed in to the \code{autocart} function that controls the splitting

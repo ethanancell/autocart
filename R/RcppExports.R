@@ -10,9 +10,11 @@
 #' @param beta A scalar value between 0 and 1 to weight the shape of the region in the splitting
 #' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 #' @return An S3 object of class "autocart".
+#'
 #' @import fields
+#' @export
 autocart <- function(response, data, locations, alpha, beta, control = NULL) {
-    .Call('_autocart_autocart', PACKAGE = 'autocart', response, data, locations, alpha, beta, control)
+    .Call(`_autocart_autocart`, response, data, locations, alpha, beta, control)
 }
 
 #' Given an autocart model object, predict for new data passed in
@@ -20,7 +22,9 @@ autocart <- function(response, data, locations, alpha, beta, control = NULL) {
 #' @param autocartModel An S3 object of type "autocart" returned from the autocart function
 #' @param newdata A dataframe with the same amount of columns used to create the autocart model.
 #' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
+#'
+#' @export
 predictAutocart <- function(autocartModel, newdata) {
-    .Call('_autocart_predictAutocart', PACKAGE = 'autocart', autocartModel, newdata)
+    .Call(`_autocart_predictAutocart`, autocartModel, newdata)
 }
 

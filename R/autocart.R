@@ -5,8 +5,12 @@
 #' @param maxdepth Set the maximum depth in the final tree. A root node is counted as a height of 0.
 #' @param distpower The power of inverse distance to use when calculating spatial weights matrix.
 #' @param islonglat Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations
+#' @param standardizeloss Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?
+#' @param givePredAsFactor In the returned autocart model, should the prediction vector also be returned as a factor?
 #' @return An object passed in to the \code{autocart} function that controls the splitting
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE) {
+#'
+#' @export
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE) {
 
   # Make sure the user passed in valid input
   #if (typeof(minsplit) != "numeric" & typeof(minsplit) != "integer") {
@@ -32,13 +36,17 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   maxdepth = as.integer(maxdepth)
   distpower = as.integer(distpower)
   islonglat = as.logical(islonglat)
+  standardizeloss = as.logical(standardizeloss)
+  givePredAsFactor = as.logical(givePredAsFactor)
 
   control <- list(
     minsplit = minsplit,
     minbucket = minbucket,
     maxdepth = maxdepth,
     distpower = distpower,
-    islonglat = islonglat
+    islonglat = islonglat,
+    standardizeloss = standardizeloss,
+    givePredAsFactor = givePredAsFactor
   )
 
   # Set the name for the control object
