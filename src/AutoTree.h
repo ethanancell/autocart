@@ -24,6 +24,10 @@ struct node {
   DataFrame data;
   NumericMatrix locations;
 
+  // Evaluation measures at each node
+  double RSS;
+  double mi;
+
   node* left;
   node* right;
 };

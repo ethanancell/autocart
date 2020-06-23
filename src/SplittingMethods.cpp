@@ -12,6 +12,41 @@
 using namespace Rcpp;
 
 // ======================================
+// ========== HELPER FUNCTIONS ==========
+// ======================================
+
+/* This helper function will create a weights matrix for use with the Moran I
+ * function or otherwise. It takes a matrix of locations, a power to use with
+ * distance (i.e. inverse distance squared), and whether it is longitude and
+ * latitude coordinates (use Great circle distance or not?). It will return
+ * an inverse distance based weights matrix.
+ */
+NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat) {
+  int n = locations.nrow();
+  NumericMatrix weights;
+  if (islonglat) {
+    Function greatCircleDistance("rdist.earth");
+    weights = greatCircleDistance(locations);
+  }
+  else {
+    Function euclidDistMatrix("rdist");
+    weights = euclidDistMatrix(locations);
+  }
+  for (int i=0; i<n; i++) {
+    for (int j=0; j<n; j++) {
+      if (distpower != 1) {
+        weights(i, j) = pow(weights(i, j), distpower);
+      }
+      if (i != j) {
+        weights(i, j) = 1.0 / weights(i, j);
+      }
+    }
+  }
+
+  return weights;
+}
+
+// ======================================
 // ======== CONTINUOUS VARIABLES ========
 // ======================================
 
@@ -58,7 +93,7 @@ NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x
   NumericVector goodness(n-1, 0.0);
 
   // This weights matrix will be used in MoranI
-  Function greatCircleDistance("rdist.earth");
+  /*Function greatCircleDistance("rdist.earth");
   Function euclidDistMatrix("rdist");
   NumericMatrix allWeights;
   if (islonglat) {
@@ -77,7 +112,8 @@ NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x
         allWeights(i, j) = 1.0 / allWeights(i, j);
       }
     }
-  }
+  }*/
+  NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat);
 
   // Using the minbucket parameter, we can only calculate the splits which start at
   // "minbucket-1", and then only calculate up to "n-minbucket"

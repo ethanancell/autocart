@@ -278,8 +278,21 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   }
   averageResponse = averageResponse / response.size();
 
+  // Find the residual sum of squares for this group
+  double RSS = 0;
+  for (int i=0; i<response.size(); i++) {
+    RSS += pow(response[i] - averageResponse, 2);
+  }
+
+  // Get the morans I for this group
+  double groupMoranI = 0;
+  if (alpha > 0) {
+    NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat);
+    groupMoranI = moranI(response, nodeWeights);
+  }
+
   int obsInNode = response.size();
-  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, NULL, NULL};
+  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, RSS, groupMoranI, NULL, NULL};
 
   return newnode;
 }
@@ -466,6 +479,10 @@ DataFrame AutoTree::createSplitDataFrame() {
   IntegerVector leftloc(nodesInTree, -1);
   IntegerVector rightloc(nodesInTree, -1);
 
+  // Node evaluation (spatial autocorrelation and residual sum of squares)
+  NumericVector rss(nodesInTree);
+  NumericVector mi(nodesInTree);
+
   // Create the splitting dataframe using a stack
   std::stack<node*> dfCreationStack;
   std::stack<int> rowLocations;
@@ -490,6 +507,8 @@ DataFrame AutoTree::createSplitDataFrame() {
     isterminal[thisRow] = nextNode->isTerminalNode;
     prediction[thisRow] = nextNode->prediction;
     iscategorical[thisRow] = nextNode->isCategoricalSplit;
+    rss[thisRow] = nextNode->RSS;
+    mi[thisRow] = nextNode->mi;
 
     // Push the children if they exist and add to the left/right locations
     if (nextNode->left != NULL && nextNode->right != NULL) {
@@ -511,7 +530,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // Construct the final dataframe from the vectors
-  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction);
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi);
   return splitDataFrame;
 }
 

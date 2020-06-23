@@ -4,6 +4,9 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 
+// Helper
+NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat);
+
 // Continuous
 NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector x_vector, NumericVector wt, int minbucket);
 NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat);
