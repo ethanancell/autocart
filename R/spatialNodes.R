@@ -2,13 +2,14 @@
 #'
 #' @param autocartModel An S3 object of type "autocart" returned by the \code{autocart} function.
 #' @param optionalCRS a string containing a coordinate reference system. This is the CRS of the returned list
+#' @param distpower The power of distance (e.g. distance squared) used in IDW interpolation
 #' @return A list with all interpolated layers
 #'
 #' @import gstat
 #' @import raster
+#' @import rgdal
 #' @import sp
-#' @export
-spatialNodes <- function(autocartModel, optionalCRS = "+proj=utm +zone=12 +units=km") {
+spatialNodes <- function(autocartModel, resolution, optionalCRS, distpower) {
 
   # Note in this script:
   # Migration to rgdal newest version causes tons of warnings in output.
@@ -52,7 +53,7 @@ spatialNodes <- function(autocartModel, optionalCRS = "+proj=utm +zone=12 +units
       nodeCoords <- spTransform(nodeCoords, crs(optionalCRS))
 
       # Create a raster object for this node
-      nodeRaster <- raster(spLayerBase, res=10)
+      nodeRaster <- raster(spLayerBase, res=resolution)
 
       #v <- gstat::variogram(actual ~ 1, data = nodeCoords, cutoff=100)
       #v.fit <- gstat::fit.variogram(v, vgm("Sph"))
@@ -62,7 +63,7 @@ spatialNodes <- function(autocartModel, optionalCRS = "+proj=utm +zone=12 +units
       # We can krige if the user specifies all the models to use for each of the variograms.
       # If we wish to make the process more automatic, then we can use IDW, which is what we will
       # test with.
-      gs <- gstat(formula = actual ~ 1, data=nodeCoords)
+      gs <- gstat(formula = actual ~ 1, data=nodeCoords, set = list(idp = 2))
       thisIDW <- interpolate(nodeRaster, gs)
 
       interpolatedLayers[[level]] <- thisIDW
@@ -85,10 +86,19 @@ spatialNodes <- function(autocartModel, optionalCRS = "+proj=utm +zone=12 +units
 
 #' Using a spatial nodes process, predict with new observations
 #'
-#' @param spatialBrick The raster brick returned from the \code{spatialNodes} function
+#' @param autocartModel The model returned from the \code{autocart} function
+#' @param newdata The dataframe of predictor values that we wish to make new predictions with
+#' @param newdataCoords The matrix of locations for the newdata dataframe
+#' @param resolution When performing IDW interpolation, what resolution (size of cells) should be used? Make sure this lines up intuitively with the optionalCRS argument.
+#' @param optionalCRS What coordinate reference system would you like to use in the returned predictions?
+#' @param distpower The power of distance (e.g. distance squared) used in IDW interpolation
 #' @return A vector with the predicted values for the passed in dataframe of observations
-predictSpatialNodes <- function(spatialBrick, autocartModel, newdata, newdataCoords) {
+#'
+#' @export
+predictSpatialNodes <- function(autocartModel, newdata, newdataCoords, resolution, optionalCRS = "+proj=utm +zone=12 +units=km", distpower = 2) {
 
+  # Get the raster brick that contains a layer for each of the interpolations performed
+  spatialBrick <- spatialNodes(autocartModel, resolution, optionalCRS, distpower)
   brickCRS <- spatialBrick@crs
 
   # Run each of the new observations through the tree to see which layer it falls in

@@ -4,13 +4,17 @@
 \alias{spatialNodes}
 \title{Create a spatial process at the end of the nodes of an autocart model.}
 \usage{
-spatialNodes(autocartModel)
+spatialNodes(autocartModel, resolution, optionalCRS, distpower)
 }
 \arguments{
 \item{autocartModel}{An S3 object of type "autocart" returned by the \code{autocart} function.}
+
+\item{optionalCRS}{a string containing a coordinate reference system. This is the CRS of the returned list}
+
+\item{distpower}{The power of distance (e.g. distance squared) used in IDW interpolation}
 }
 \value{
-The number 3
+A list with all interpolated layers
 }
 \description{
 Create a spatial process at the end of the nodes of an autocart model.

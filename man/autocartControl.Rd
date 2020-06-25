@@ -11,7 +11,8 @@ autocartControl(
   distpower = 1,
   islonglat = TRUE,
   standardizeloss = TRUE,
-  givePredAsFactor = TRUE
+  givePredAsFactor = TRUE,
+  retainCoords = TRUE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ autocartControl(
 \item{standardizeloss}{Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?}
 
 \item{givePredAsFactor}{In the returned autocart model, should the prediction vector also be returned as a factor?}
+
+\item{retainCoords}{After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?}
 }
 \value{
 An object passed in to the \code{autocart} function that controls the splitting
