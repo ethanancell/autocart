@@ -29,6 +29,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   bool islonglat = true;
   bool standardizeLoss = true;
   bool givePredAsFactor = true;
+  bool retainCoords = true;
 
   // If there is a passed in autocartControl object, then modify the behavior of the splitting.
   if (control.isNotNull()) {
@@ -46,6 +47,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     islonglat = as<bool>(autocartControl["islonglat"]);
     standardizeLoss = as<bool>(autocartControl["standardizeloss"]);
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
+    retainCoords = as<bool>(autocartControl["retainCoords"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -66,7 +68,6 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   // Construct the S3 object that contains information about the model
   List autocartModel;
   if (givePredAsFactor) {
-
     // Convert the prediction vector to a factor and include it in the output of the model
     NumericVector levs = sort_unique(prediction);
     IntegerVector predAsFactor = match(prediction, levs);
@@ -77,6 +78,25 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
   else {
     autocartModel = List::create(_["prediction"] = prediction, _["splitframe"] = splitframe, _["splitparams"] = splitparams);
+  }
+
+  // The "retainCoords" parameter specifies if we also add a dataframe with the longitude/latitude/prediction of all items
+  // that went into training the tree. This is useful when creating a spatial
+  // process at the terminal nodes of the tree.
+  if (retainCoords) {
+    // If coordinates are given as longitude and latitude, we name them with
+    // "long" and "lat". If otherwise, then it wouldn't make sense to call them
+    // long and lat so we'll use "x" and "y".
+    NumericVector x = locations(_, 0);
+    NumericVector y = locations(_, 1);
+    DataFrame coords;
+    if (islonglat) {
+      coords = DataFrame::create(_["long"] = x, _["lat"] = y, _["pred"] = prediction, _["actual"] = response);
+    }
+    else {
+      coords = DataFrame::create(_["x"] = x, _["y"] = y, _["pred"] = prediction, _["actual"] = response);
+    }
+    autocartModel.push_back(coords, "coords");
   }
 
   autocartModel.attr("class") = "autocart";

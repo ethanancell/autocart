@@ -482,6 +482,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   // Node evaluation (spatial autocorrelation and residual sum of squares)
   NumericVector rss(nodesInTree);
   NumericVector mi(nodesInTree);
+  NumericVector expectedMi(nodesInTree);
 
   // Create the splitting dataframe using a stack
   std::stack<node*> dfCreationStack;
@@ -510,6 +511,9 @@ DataFrame AutoTree::createSplitDataFrame() {
     rss[thisRow] = nextNode->RSS;
     mi[thisRow] = nextNode->mi;
 
+    // Expected value of Moran's I is calculated as -1 / (N-1)
+    expectedMi[thisRow] = -1.0 / (nextNode->obsInNode - 1);
+
     // Push the children if they exist and add to the left/right locations
     if (nextNode->left != NULL && nextNode->right != NULL) {
       // For both left and right sides, we use row+1 instead of row because
@@ -530,7 +534,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // Construct the final dataframe from the vectors
-  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi);
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi, _["expectedMi"] = expectedMi);
   return splitDataFrame;
 }
 

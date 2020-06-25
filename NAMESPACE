@@ -3,6 +3,8 @@
 export(autocart)
 export(autocartControl)
 export(predictAutocart)
+export(spatialNodes)
 import(fields)
+import(gstat)
 importFrom(Rcpp,sourceCpp)
 useDynLib(autocart, .registration = TRUE)

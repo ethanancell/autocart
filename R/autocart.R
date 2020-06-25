@@ -7,29 +7,40 @@
 #' @param islonglat Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations
 #' @param standardizeloss Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?
 #' @param givePredAsFactor In the returned autocart model, should the prediction vector also be returned as a factor?
+#' @param retainCoords After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?
 #' @return An object passed in to the \code{autocart} function that controls the splitting
 #'
 #' @export
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE) {
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE, retainCoords = TRUE) {
 
-  # Make sure the user passed in valid input
-  #if (typeof(minsplit) != "numeric" & typeof(minsplit) != "integer") {
-  #  stop("\"minsplit\" parameter to autocartControl must be numeric or an integer.")
-  #}
-  #if (typeof(minbucket) != "numeric" & typeof(minbucket) != "integer") {
-  #  stop("\"minbucket\" parameter to autocartControl must be numeric or an integer.")
-  #}
-  #if (typeof(xval) != "numeric" & typeof(xval) != "integer") {
-  #  stop("\"xval\" parameter to autocartControl must be numeric or an integer.")
-  #}
-  #if (typeof(maxdepth) != "numeric" & typeof(maxdepth) != "integer") {
-  #  stop("\"maxdepth\" parameter to autocartControl must be numeric or an integer.")
-  #}
+  # Error check the user input
+  if (!is.numeric(minsplit)) {
+    stop("\"minsplit\" parameter must be a numeric or integer.")
+  }
+  if (!is.numeric(minbucket)) {
+    stop("\"minbucket\" parameter must be a numeric or integer.")
+  }
+  if (!is.numeric(distpower)) {
+    stop("\"distpower\" parameter must be a numeric or integer.")
+  }
+  if (!is.logical(islonglat)) {
+    stop("\"islonglat\" parameter must be logical.")
+  }
+  if (!is.logical(standardizeloss)) {
+    stop("\"standardizeloss\" parameter must be logical.")
+  }
+  if (!is.logical(givePredAsFactor)) {
+    stop("\"givePredAsFactor\" parameter must be logical.")
+  }
+  if (!is.logical(retainCoords)) {
+    stop("\"retainCoords\" parameter must be logical.")
+  }
 
-  # Check length of vectors
-  #if (length(minsplit) > 1 | length(minbucket > 1 | length(xval) > 1 | length(maxdepth) > 1)) {
-  #  stop("All parameters passed to autocartContorl must be scalars.")
-  #}
+  # if the user specifies only minbucket, then the splitting function will have
+  # issues without an appropriately set minsplit
+  if (missing(minsplit) && !missing(minbucket)) {
+    minsplit <- minbucket * 3
+  }
 
   minsplit = as.integer(minsplit)
   minbucket = as.integer(minbucket)
@@ -38,6 +49,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   islonglat = as.logical(islonglat)
   standardizeloss = as.logical(standardizeloss)
   givePredAsFactor = as.logical(givePredAsFactor)
+  retainCoords = as.logical(retainCoords)
 
   control <- list(
     minsplit = minsplit,
@@ -46,7 +58,8 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     distpower = distpower,
     islonglat = islonglat,
     standardizeloss = standardizeloss,
-    givePredAsFactor = givePredAsFactor
+    givePredAsFactor = givePredAsFactor,
+    retainCoords = retainCoords
   )
 
   # Set the name for the control object

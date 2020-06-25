@@ -427,8 +427,6 @@ NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix lo
 
       goodness[factorLevel] = BSS / TSS;
     }
-
-    return goodness;
   }
 
   return goodness;
