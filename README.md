@@ -9,4 +9,4 @@ stage of the tree creation.
 
 To install this package in an R environment, use `devtools::install_github("ethanancell/autocart")`
 
-To get started after installation, view the 
+To get started after installation, view the [introductory autocart vignette.](doc/autocart-intro.html)
