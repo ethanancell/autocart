@@ -1,6 +1,6 @@
 #include <Rcpp.h>
-#include "AutoTree.h"
-#include "SpatialMethods.h"
+#include "autotree.h"
+#include "spatialmethods.h"
 
 using namespace Rcpp;
 

@@ -22,9 +22,9 @@
 #include <Rcpp.h>
 #include <math.h>
 #include <bits/stdc++.h>
-#include "AutoTree.h"
-#include "SpatialMethods.h"
-#include "SplittingMethods.h"
+#include "autotree.h"
+#include "spatialmethods.h"
+#include "splittingmethods.h"
 
 using namespace Rcpp;
 

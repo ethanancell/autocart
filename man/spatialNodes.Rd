@@ -2,20 +2,28 @@
 % Please edit documentation in R/spatialNodes.R
 \name{spatialNodes}
 \alias{spatialNodes}
-\title{Create a spatial process at the end of the nodes of an autocart model.}
+\title{Using an autocart model, use the terminal nodes to form a spatial process that uses inverse
+distance weighting to interpolate. The prediction for the new data that is passed in is formed
+by making a prediction to assign it to a group. Next, the residual for the new prediction is
+formed by inverse distance weighting the residual for the other points that are a part of that geometry.}
 \usage{
-spatialNodes(autocartModel, resolution, optionalCRS, distpower)
+spatialNodes(autocartModel, newdata, newdataCoords, distpower = 2)
 }
 \arguments{
-\item{autocartModel}{An S3 object of type "autocart" returned by the \code{autocart} function.}
+\item{autocartModel}{an autocart model returned from the \code{autocart} function.}
 
-\item{optionalCRS}{a string containing a coordinate reference system. This is the CRS of the returned list}
+\item{newdata}{a dataframe that contains the same predictors that were used to form the tree.}
 
-\item{distpower}{The power of distance (e.g. distance squared) used in IDW interpolation}
+\item{newdataCoords}{a matrix of coordinates for all the predictors contained in \code{newdata}}
+
+\item{distpower}{the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.}
 }
 \value{
-A list with all interpolated layers
+a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 }
 \description{
-Create a spatial process at the end of the nodes of an autocart model.
+Using an autocart model, use the terminal nodes to form a spatial process that uses inverse
+distance weighting to interpolate. The prediction for the new data that is passed in is formed
+by making a prediction to assign it to a group. Next, the residual for the new prediction is
+formed by inverse distance weighting the residual for the other points that are a part of that geometry.
 }

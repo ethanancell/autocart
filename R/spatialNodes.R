@@ -1,123 +1,64 @@
-#' Create a spatial process at the end of the nodes of an autocart model.
+#' Using an autocart model, use the terminal nodes to form a spatial process that uses inverse
+#' distance weighting to interpolate. The prediction for the new data that is passed in is formed
+#' by making a prediction to assign it to a group. Next, the residual for the new prediction is
+#' formed by inverse distance weighting the residual for the other points that are a part of that geometry.
 #'
-#' @param autocartModel An S3 object of type "autocart" returned by the \code{autocart} function.
-#' @param optionalCRS a string containing a coordinate reference system. This is the CRS of the returned list
-#' @param distpower The power of distance (e.g. distance squared) used in IDW interpolation
-#' @return A list with all interpolated layers
+#' @param autocartModel an autocart model returned from the \code{autocart} function.
+#' @param newdata a dataframe that contains the same predictors that were used to form the tree.
+#' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
+#' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
+#' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
-#' @import gstat
-#' @import raster
-#' @import rgdal
-#' @import sp
-spatialNodes <- function(autocartModel, resolution, optionalCRS, distpower) {
-
-  # Note in this script:
-  # Migration to rgdal newest version causes tons of warnings in output.
-  # Current recommended course of action is to disable the warnings as there is no other fix.
-  # For that reason we use "suppressWarnings" on each of the proj4string statements.
+#' @import fields
+#' @export
+spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
     stop("\"autocartModel\" parameter is not an autocart model.")
   }
 
+  # Use whether the autocartModel used long/lat to determine if this should use long/lat
+  # (Great circle distance or euclidean distance?)
+  islonglat <- autocartModel$splitparams$islonglat
+
   allCoords <- autocartModel$coords
-  predFactor <- allCoords$pred
-  predFactor <- as.factor(predFactor)
-  numLevels = length(levels(predFactor))
-  splitFrame <- autocartModel$splitframe
+  predFactor <- as.factor(allCoords$pred)
+  numLevels <- length(levels(predFactor))
 
-  allTerminalNodes <- splitFrame[splitFrame$isterminal, ]
-
-  spLayerBase <- allCoords
-  coordinates(spLayerBase) <- ~long+lat
-  proj4string(spLayerBase) <- crs("+proj=longlat +datum=WGS84")
-  spLayerBase <- spTransform(spLayerBase, crs(optionalCRS))
-
-  # As a new layer is interpolated, we will add to the list here
-  interpolatedLayers <- vector("list", numLevels)
-
-  # Create a spatial process for each of the nodes
+  # Separate out all the terminal nodes into their own individual collection of points
+  leafGeometryList <- vector("list", numLevels)
   for (level in 1:numLevels) {
+    leafGeometryList[[level]] <- allCoords[predFactor == levels(predFactor)[level], ]
+  }
 
-    thisLevel <- levels(predFactor)[level]
-    thisLevelIndices <- predFactor == thisLevel
-    thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == thisLevel, ]
+  # Find out which spatial process each new prediction belongs to
+  whichLayer <- predictAutocart(autocartModel, newdata)
+  returnPredictions <- whichLayer
 
-    # If Moran's I is above expected, then we can create a spatial process at this node.
-    if (thisTerminalNode$mi > thisTerminalNode$expectedMi) {
-      nodeCoords <- allCoords[thisLevelIndices, ]
+  # For each row in the new data we wish to predict, find out which spatial process it is a part of
+  # then inverse distance weight each of the observations in that spatial process
+  for (row in 1:length(whichLayer)) {
+    thisGeometry <- leafGeometryList[[which(levels(predFactor) == whichLayer[1])]]
+    thisGeometryCoordinates <- as.matrix(cbind(thisGeometry$long, thisGeometry$lat))
 
-      coordinates(nodeCoords) <- ~long+lat
-      proj4string(nodeCoords) <- crs("+proj=longlat +datum=WGS84")
-      nodeCoords <- spTransform(nodeCoords, crs(optionalCRS))
-
-      # Create a raster object for this node
-      nodeRaster <- raster(spLayerBase, res=resolution)
-
-      #v <- gstat::variogram(actual ~ 1, data = nodeCoords, cutoff=100)
-      #v.fit <- gstat::fit.variogram(v, vgm("Sph"))
-      #plot(v.fit)
-      #plot(v)
-
-      # We can krige if the user specifies all the models to use for each of the variograms.
-      # If we wish to make the process more automatic, then we can use IDW, which is what we will
-      # test with.
-      gs <- gstat(formula = actual ~ 1, data=nodeCoords, set = list(idp = 2))
-      thisIDW <- interpolate(nodeRaster, gs)
-
-      interpolatedLayers[[level]] <- thisIDW
-
+    # Get a distance matrix from this point to all other points in the geometry
+    if (islonglat) {
+      distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
     } else {
-      # When there is seemingly no spatial effect, we'll give the entire raster layer the
-      # average value in that node
-      thisAverage <- thisTerminalNode$prediction
-      nodeRaster <- raster(spLayerBase, res=10)
-      values(nodeRaster) <- rep(thisAverage, nodeRaster@ncols * nodeRaster@nrows)
-
-      interpolatedLayers[[level]] <- nodeRaster
+      distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
     }
+
+    invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
+    weights <- as.vector(invDistMatrix)
+    sumWeights <- sum(weights)
+
+    # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
+    residualVector <- thisGeometry$actual - thisGeometry$pred
+    predictedResidual <- sum(weights * residualVector) / sumWeights
+
+    returnPredictions[row] <- returnPredictions[row] + predictedResidual
   }
 
-  names(interpolatedLayers) = levels(predFactor)
-  brick(interpolatedLayers)
-}
-
-
-#' Using a spatial nodes process, predict with new observations
-#'
-#' @param autocartModel The model returned from the \code{autocart} function
-#' @param newdata The dataframe of predictor values that we wish to make new predictions with
-#' @param newdataCoords The matrix of locations for the newdata dataframe
-#' @param resolution When performing IDW interpolation, what resolution (size of cells) should be used? Make sure this lines up intuitively with the optionalCRS argument.
-#' @param optionalCRS What coordinate reference system would you like to use in the returned predictions?
-#' @param distpower The power of distance (e.g. distance squared) used in IDW interpolation
-#' @return A vector with the predicted values for the passed in dataframe of observations
-#'
-#' @export
-predictSpatialNodes <- function(autocartModel, newdata, newdataCoords, resolution, optionalCRS = "+proj=utm +zone=12 +units=km", distpower = 2) {
-
-  # Get the raster brick that contains a layer for each of the interpolations performed
-  spatialBrick <- spatialNodes(autocartModel, resolution, optionalCRS, distpower)
-  brickCRS <- spatialBrick@crs
-
-  # Run each of the new observations through the tree to see which layer it falls in
-  newPredictions <- predictAutocart(autocartModel, newdata)
-  returnedPredictions <- rep(NA, length(newPredictions))
-
-  # Get the raster layer for that prediction
-  for (row in 1:length(returnedPredictions)) {
-    layerName <- paste("X", newPredictions[row], sep="")
-    thisRasterLayer <- spatialBrick[[layerName]]
-
-    # Convert the new data coordinates to the same CRS as the spatialBrick
-    mtx <- t(as.matrix(newdataCoords[row, ]))
-    thisRowLocation <- SpatialPoints(mtx, proj4string = crs("+proj=longlat +datum=WGS84"))
-    thisRowLocation <- spTransform(thisRowLocation, brickCRS)
-
-    thisPrediction <- raster::extract(thisRasterLayer, thisRowLocation)
-    returnedPredictions[row] <- thisPrediction
-  }
-
-  returnedPredictions
+  return(returnPredictions)
 }

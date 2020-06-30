@@ -7,7 +7,7 @@
  */
 
 #include <Rcpp.h>
-#include "SpatialMethods.h"
+#include "spatialmethods.h"
 
 using namespace Rcpp;
 
