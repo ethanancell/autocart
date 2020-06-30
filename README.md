@@ -6,3 +6,7 @@ where geographical coordinates can be tracked at every stage to include custom s
 
 This package is an implementation of the CART algorithm that allows for tracking geographical location in the observations at every
 stage of the tree creation.
+
+To install this package in an R environment, use `devtools::install_github("ethanancell/autocart")`
+
+To get started after installation, view the 
