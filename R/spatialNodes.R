@@ -60,7 +60,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
 
     # Only use a spatial effect if a spatial effect exists in this node. If no spatial effect exists, just predict
     # using the average of this node.
-    thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == whichLayer[row]]
+    thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == whichLayer[row], ]
     if (thisTerminalNode$mi > thisTerminalNode$expectedMi) {
       # Get a distance matrix from this point to all other points in the geometry
       if (islonglat) {
@@ -78,9 +78,6 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
       predictedResidual <- sum(weights * residualVector) / sumWeights
 
       returnPredictions[row] <- returnPredictions[row] + predictedResidual
-    } else {
-      # Use the average since no spatial effect is reported.
-      returnPredictions[row] <- whichLayer[row]
     }
   }
 
