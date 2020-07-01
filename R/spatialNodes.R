@@ -17,6 +17,18 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
   if (!inherits(autocartModel, "autocart")) {
     stop("\"autocartModel\" parameter is not an autocart model.")
   }
+  if (!is.data.frame(newdata)) {
+    stop("newdata parameter must be a dataframe.")
+  }
+  if (!is.matrix(newdataCoords)) {
+    stop("newdataCoords parameter must be a matrix.")
+  }
+  if (ncol(newdataCoords) != 2) {
+    stop("newdataCoords must have only two columns.")
+  }
+  if (nrow(newdata) != nrow(newdataCoords)) {
+    stop("The number of rows in newdata and newdataCoords are not the same.")
+  }
 
   # Use whether the autocartModel used long/lat to determine if this should use long/lat
   # (Great circle distance or euclidean distance?)
@@ -25,6 +37,10 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
   allCoords <- autocartModel$coords
   predFactor <- as.factor(allCoords$pred)
   numLevels <- length(levels(predFactor))
+
+  # Extract data necessary to find Moran's I at each terminal node.
+  splitFrame <- autocartModel$splitframe
+  allTerminalNodes <- splitFrame[splitFrame$isterminal, ]
 
   # Separate out all the terminal nodes into their own individual collection of points
   leafGeometryList <- vector("list", numLevels)
@@ -39,25 +55,33 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
   # For each row in the new data we wish to predict, find out which spatial process it is a part of
   # then inverse distance weight each of the observations in that spatial process
   for (row in 1:length(whichLayer)) {
-    thisGeometry <- leafGeometryList[[which(levels(predFactor) == whichLayer[1])]]
+    thisGeometry <- leafGeometryList[[which(levels(predFactor) == whichLayer[row])]]
     thisGeometryCoordinates <- as.matrix(cbind(thisGeometry$long, thisGeometry$lat))
 
-    # Get a distance matrix from this point to all other points in the geometry
-    if (islonglat) {
-      distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+    # Only use a spatial effect if a spatial effect exists in this node. If no spatial effect exists, just predict
+    # using the average of this node.
+    thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == whichLayer[row]]
+    if (thisTerminalNode$mi > thisTerminalNode$expectedMi) {
+      # Get a distance matrix from this point to all other points in the geometry
+      if (islonglat) {
+        distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+      } else {
+        distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+      }
+
+      invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
+      weights <- as.vector(invDistMatrix)
+      sumWeights <- sum(weights)
+
+      # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
+      residualVector <- thisGeometry$actual - thisGeometry$pred
+      predictedResidual <- sum(weights * residualVector) / sumWeights
+
+      returnPredictions[row] <- returnPredictions[row] + predictedResidual
     } else {
-      distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+      # Use the average since no spatial effect is reported.
+      returnPredictions[row] <- whichLayer[row]
     }
-
-    invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
-    weights <- as.vector(invDistMatrix)
-    sumWeights <- sum(weights)
-
-    # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
-    residualVector <- thisGeometry$actual - thisGeometry$pred
-    predictedResidual <- sum(weights * residualVector) / sumWeights
-
-    returnPredictions[row] <- returnPredictions[row] + predictedResidual
   }
 
   return(returnPredictions)
