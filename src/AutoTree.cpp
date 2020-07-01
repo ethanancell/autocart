@@ -286,10 +286,8 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
 
   // Get the morans I for this group
   double groupMoranI = 0;
-  if (alpha > 0) {
-    NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat);
-    groupMoranI = moranI(response, nodeWeights);
-  }
+  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat);
+  groupMoranI = moranI(response, nodeWeights);
 
   int obsInNode = response.size();
   node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, RSS, groupMoranI, NULL, NULL};
