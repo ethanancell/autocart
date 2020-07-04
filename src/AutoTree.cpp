@@ -33,7 +33,7 @@ AutoTree::AutoTree() {
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -89,6 +89,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     distpower = distpower_;
     islonglat = islonglat_;
     standardizeLoss = standardizeLoss_;
+    useGearyC = useGearyC_;
 
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
@@ -289,8 +290,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat);
   groupMoranI = moranI(response, nodeWeights);
 
+  // Get Geary's C for this group
+  double groupGearyC = gearyC(response, nodeWeights);
+
   int obsInNode = response.size();
-  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, RSS, groupMoranI, NULL, NULL};
+  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, RSS, groupMoranI, groupGearyC, NULL, NULL};
 
   return newnode;
 }
@@ -332,7 +336,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
   }
   if (alpha > 0) {
-    t2 = continuousGoodnessByMoranI(y, x, orderedLocations, wt, minbucket, distpower, islonglat);
+    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, wt, minbucket, distpower, islonglat, useGearyC);
   }
   if (beta > 0) {
     t3 = continuousGoodnessBySize(x, orderedLocations, wt, minbucket, islonglat);
@@ -372,7 +376,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
      t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
    }
    if (alpha > 0) {
-     t2 = categoricalGoodnessByMoranI(response, x_vector, locations, wt, minbucket, distpower, islonglat);
+     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, wt, minbucket, distpower, islonglat, useGearyC);
    }
    if (beta > 0) {
      t3 = categoricalGoodnessBySize(x_vector, locations, wt, minbucket, islonglat);
@@ -480,7 +484,9 @@ DataFrame AutoTree::createSplitDataFrame() {
   // Node evaluation (spatial autocorrelation and residual sum of squares)
   NumericVector rss(nodesInTree);
   NumericVector mi(nodesInTree);
+  NumericVector gc(nodesInTree);
   NumericVector expectedMi(nodesInTree);
+  NumericVector expectedGc(nodesInTree);
 
   // Create the splitting dataframe using a stack
   std::stack<node*> dfCreationStack;
@@ -508,9 +514,15 @@ DataFrame AutoTree::createSplitDataFrame() {
     iscategorical[thisRow] = nextNode->isCategoricalSplit;
     rss[thisRow] = nextNode->RSS;
     mi[thisRow] = nextNode->mi;
+    gc[thisRow] = nextNode->gc;
 
     // Expected value of Moran's I is calculated as -1 / (N-1)
     expectedMi[thisRow] = -1.0 / (nextNode->obsInNode - 1);
+
+    // The expected value of Geary's C is always going to be 1. The only reason to include it is so that 
+    // I stay consistent with including the expected value of Moran's I in the datatable and I don't want to expect
+    // that users of the package know that E(C) = 1
+    expectedGc[thisRow] = 1.0;
 
     // Push the children if they exist and add to the left/right locations
     if (nextNode->left != NULL && nextNode->right != NULL) {
@@ -532,7 +544,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // Construct the final dataframe from the vectors
-  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi, _["expectedMi"] = expectedMi);
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi, _["expectedMi"] = expectedMi, _["gc"] = gc, _["expectedGc"] = expectedGc);
   return splitDataFrame;
 }
 

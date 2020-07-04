@@ -7,11 +7,12 @@
 #' @param newdata a dataframe that contains the same predictors that were used to form the tree.
 #' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
+#' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
 #' @import fields
 #' @export
-spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
+spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2, decideByGC = FALSE) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
@@ -28,6 +29,12 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
   }
   if (nrow(newdata) != nrow(newdataCoords)) {
     stop("The number of rows in newdata and newdataCoords are not the same.")
+  }
+
+  # If we are missing the decideByGC parameter, then we will use the splitting parameter that was used
+  # in the creation of the autocart model.
+  if (missing(decideByGC)) {
+    decideByGC <- autocartModel$splitparams$useGearyC
   }
 
   # Use whether the autocartModel used long/lat to determine if this should use long/lat
@@ -61,7 +68,17 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2) {
     # Only use a spatial effect if a spatial effect exists in this node. If no spatial effect exists, just predict
     # using the average of this node.
     thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == whichLayer[row], ]
-    if (thisTerminalNode$mi > thisTerminalNode$expectedMi) {
+
+    # Evaluate if a spatial process should exist at this terminal node, depending on whether
+    # we want to use Geary's C or Moran's I.
+    spatialProcessExists <- FALSE
+    if (decideByGC) {
+      spatialProcessExists <- thisTerminalNode$gc < thisTerminalNode$expectedGc
+    } else {
+      spatialProcessExists <- thisTerminalNode$mi < thisTerminalNode$expectedMi
+    }
+
+    if (spatialProcessExists) {
       # Get a distance matrix from this point to all other points in the geometry
       if (islonglat) {
         distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)

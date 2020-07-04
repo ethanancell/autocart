@@ -9,12 +9,12 @@ NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islo
 
 // Continuous
 NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector x_vector, NumericVector wt, int minbucket);
-NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat);
+NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC);
 NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, bool islonglat);
 
 // Categorical
 NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVector x_vector, NumericVector wt, int minbucket);
-NumericVector categoricalGoodnessByMoranI(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat);
+NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC);
 NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, bool islonglat);
 
 #endif

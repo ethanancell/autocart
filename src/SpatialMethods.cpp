@@ -135,3 +135,52 @@ double moranI(NumericVector response, NumericMatrix weights) {
     return numerator / denominator;
   }
 }
+
+/* Another alternative measure of spatial autocorrelation that is more sensitive to local spatial autocorrelation rather than
+ * global spatial autocorrelation.
+ */
+double gearyC(NumericVector response, NumericMatrix weights) {
+  // Check that the input is valid
+  if (weights.rows() != weights.cols()) {
+    stop("Weights matrix supplied to moranI function is not a square matrix.");
+  }
+  if (response.size() != weights.cols()) {
+    stop("In moranI function, the response vector length is not the same as the matrix.");
+  }
+
+  int nObs = response.size();
+
+  double responseMean = 0;
+  for (int i=0; i<nObs; i++) {
+    responseMean += response[i];
+  }
+  responseMean = responseMean / nObs;
+
+  // SUMWEIGHTS
+  double sumWeights = 0.0;
+  for (int i=0; i<nObs; i++) {
+    for (int j=0; j<nObs; j++) {
+      sumWeights += weights(i, j);
+    }
+  }
+
+  // NUMERATOR
+  double numerator = 0.0;
+
+  for (int i=0; i<nObs; i++) {
+    for (int j=0; j<nObs; j++) {
+      numerator += weights(i, j) * pow((response[i] - response[j]), 2);
+    }
+  }
+  numerator *= ((double) (nObs - 1));
+
+  // DENOMINATOR
+  double denominator = 0.0;
+
+  for (int i=0; i<nObs; i++) {
+    denominator += pow(response[i] - responseMean, 2);
+  }
+  denominator *= (2 * sumWeights);
+
+  return numerator / denominator;
+}

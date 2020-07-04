@@ -8,10 +8,11 @@
 #' @param standardizeloss Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?
 #' @param givePredAsFactor In the returned autocart model, should the prediction vector also be returned as a factor?
 #' @param retainCoords After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?
+#' @param useGearyC Should autocart use Geary's C instead of Moran's I in the splitting function?
 #' @return An object passed in to the \code{autocart} function that controls the splitting
 #'
 #' @export
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE, retainCoords = TRUE) {
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE) {
 
   # Error check the user input
   if (!is.numeric(minsplit)) {
@@ -35,6 +36,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   if (!is.logical(retainCoords)) {
     stop("\"retainCoords\" parameter must be logical.")
   }
+  if (!is.logical(useGearyC)) {
+    stop("\"useGearyC\" parameter must be logical.")
+  }
 
   # if the user specifies only minbucket, then the splitting function will have
   # issues without an appropriately set minsplit
@@ -50,6 +54,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   standardizeloss = as.logical(standardizeloss)
   givePredAsFactor = as.logical(givePredAsFactor)
   retainCoords = as.logical(retainCoords)
+  useGearyC = as.logical(useGearyC)
 
   control <- list(
     minsplit = minsplit,
@@ -59,7 +64,8 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     islonglat = islonglat,
     standardizeloss = standardizeloss,
     givePredAsFactor = givePredAsFactor,
-    retainCoords = retainCoords
+    retainCoords = retainCoords,
+    useGearyC = useGearyC
   )
 
   # Set the name for the control object

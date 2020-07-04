@@ -27,6 +27,7 @@ struct node {
   // Evaluation measures at each node
   double RSS;
   double mi;
+  double gc;
 
   node* left;
   node* right;
@@ -44,7 +45,7 @@ public:
   AutoTree();
   ~AutoTree();
   void destroyTree();
-  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_);
+  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_);
 
   DataFrame createSplitDataFrame();
 
@@ -67,6 +68,7 @@ private:
   int distpower;
   bool islonglat;
   bool standardizeLoss;
+  bool useGearyC;
 
   void destroyTree(node* leaf);
   node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int level, int numObs);

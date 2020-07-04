@@ -85,34 +85,13 @@ NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector
 }
 
 // Calculate Moran's I statistic for each of the two halves
-NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat) {
+NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC) {
 
   // Order the locations matrix rows in the same order as x.
   int n = response.size();
 
   NumericVector goodness(n-1, 0.0);
 
-  // This weights matrix will be used in MoranI
-  /*Function greatCircleDistance("rdist.earth");
-  Function euclidDistMatrix("rdist");
-  NumericMatrix allWeights;
-  if (islonglat) {
-    //allWeights = euclidDistMatrix(locations);
-    allWeights = greatCircleDistance(locations);
-  }
-  else {
-    allWeights = euclidDistMatrix(locations);
-  }
-  for (int i=0; i<n; i++) {
-    for (int j=0; j<n; j++) {
-      if (distpower != 1) {
-        allWeights(i, j) = pow(allWeights(i, j), distpower);
-      }
-      if (i != j) {
-        allWeights(i, j) = 1.0 / allWeights(i, j);
-      }
-    }
-  }*/
   NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat);
 
   // Using the minbucket parameter, we can only calculate the splits which start at
@@ -132,11 +111,21 @@ NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x
     if (splitLocation != 0) {
       //NumericMatrix weightsE1 = getInvWeights(e1, distpower, islonglat);
       NumericMatrix weightsE1 = allWeights(Range(0, splitLocation), Range(0, splitLocation));
-      double mi = moranI(y1, weightsE1);
-
-      // Scale so that it fits between 0 and 1
-      mi = (mi + 1.0) / 2.0;
-      goodness[splitLocation] = mi * (splitLocation + 1);
+      
+      // GEARY C
+      if (useGearyC) {
+        double gc = gearyC(y1, weightsE1);
+        // Scale to [0, 1]
+        gc = (2.0 - gc) / 2.0;
+        goodness[splitLocation] = gc * (splitLocation + 1);
+      }
+      // MORAN I
+      else {
+        double mi = moranI(y1, weightsE1);
+        // Scale so that it fits between 0 and 1
+        mi = (mi + 1.0) / 2.0;
+        goodness[splitLocation] = mi * (splitLocation + 1);
+      }
     }
 
     // E2
@@ -144,11 +133,21 @@ NumericVector continuousGoodnessByMoranI(NumericVector response, NumericVector x
     if (splitLocation != n-2) {
       //NumericMatrix weightsE2 = getInvWeights(e2, distpower, islonglat);
       NumericMatrix weightsE2 = allWeights(Range(splitLocation+1, n-1), Range(splitLocation+1, n-1));
-      double mi = moranI(y2, weightsE2);
 
-      // Scale to [0, 1]
-      mi = (mi + 1.0) / 2.0;
-      goodness[splitLocation] += (mi * (n - splitLocation - 1));
+      // GEARY C
+      if (useGearyC) {
+        double gc = gearyC(y2, weightsE2);
+        // Scale to [0, 1]
+        gc = (2.0 - gc) / 2.0;
+        goodness[splitLocation] = gc * (splitLocation + 1);
+      }
+      // MORAN I
+      else {
+        double mi = moranI(y2, weightsE2);
+        // Scale to [0, 1]
+        mi = (mi + 1.0) / 2.0;
+        goodness[splitLocation] += (mi * (n - splitLocation - 1));
+      }
     }
 
     goodness[splitLocation] /= n;
@@ -264,7 +263,7 @@ NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVecto
 }
 
 // Spatial autocorrelation splitting
-NumericVector categoricalGoodnessByMoranI(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat) {
+NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC) {
 
   // Useful information that will be used by splitting
   CharacterVector lvls = x_vector.attr("levels");
@@ -288,67 +287,87 @@ NumericVector categoricalGoodnessByMoranI(NumericVector response, IntegerVector 
   NumericVector wtSum(numLevels);
   NumericVector ySum(numLevels);
   for (int i=0; i<n; i++) {
-   wtSum[x_vector[i] - 1] += wt[i];
-   ySum[x_vector[i] - 1] += (wt[i] * response[i]);
+    wtSum[x_vector[i] - 1] += wt[i];
+    ySum[x_vector[i] - 1] += (wt[i] * response[i]);
   }
   NumericVector means = ySum / wtSum;
 
   for (int factorLevel = 0; factorLevel < numLevels; factorLevel++) {
-     // Only calculate this if the number of observations in the factor level
-     // is bigger than minbucket
-     if (wtSum[factorLevel] >= minbucket) {
-       // Create E1 and E2 partitions by using the indices of the factor levels
-       LogicalVector factorIndices = (x_vector == (factorLevel+1));
+    // Only calculate this if the number of observations in the factor level
+    // is bigger than minbucket
+    if (wtSum[factorLevel] >= minbucket) {
+      // Create E1 and E2 partitions by using the indices of the factor levels
+      LogicalVector factorIndices = (x_vector == (factorLevel+1));
 
-       // Create the e1 and e2 Numeric matrices, as the subsetting with factorIndices does
-       // not work at all since it is a logical vector..... :(
-       NumericMatrix e1(wtSum[factorLevel], 2);
-       NumericMatrix e2(n - wtSum[factorLevel], 2);
-       int e1n = 0;
-       int e2n = 0;
-       for (int i=0; i<n; i++) {
-         if (factorIndices[i]) {
-           e1(e1n, _) = locations(i, _);
-           e1n++;
-         }
-         else {
-           e2(e2n, _) = locations(i, _);
-           e2n++;
-         }
-       }
-       NumericVector y1 = response[factorIndices];
-       NumericVector y2 = response[!factorIndices];
+      // Create the e1 and e2 Numeric matrices, as the subsetting with factorIndices does
+      // not work at all since it is a logical vector..... :(
+      NumericMatrix e1(wtSum[factorLevel], 2);
+      NumericMatrix e2(n - wtSum[factorLevel], 2);
+      int e1n = 0;
+      int e2n = 0;
+      for (int i=0; i<n; i++) {
+        if (factorIndices[i]) {
+          e1(e1n, _) = locations(i, _);
+          e1n++;
+        }
+        else {
+          e2(e2n, _) = locations(i, _);
+          e2n++;
+        }
+      }
+      NumericVector y1 = response[factorIndices];
+      NumericVector y2 = response[!factorIndices];
 
-       // INFO:
-       // wtSum[factorLevel] = the number of observations in this factor
-       // (n - wtSum[factorLevel]) = the number of observations not in the factor
+      // INFO:
+      // wtSum[factorLevel] = the number of observations in this factor
+      // (n - wtSum[factorLevel]) = the number of observations not in the factor
 
-       // E1
-       // Skip if only one observation with this factor
-       if (wtSum[factorLevel] > 1.0) {
-         NumericMatrix weightsE1 = getInvWeights(e1, distpower, islonglat);
-         double mi = moranI(y1, weightsE1);
+      // E1
+      // Skip if only one observation with this factor
+      if (wtSum[factorLevel] > 1.0) {
+        NumericMatrix weightsE1 = getInvWeights(e1, distpower, islonglat);
+      
+        // GEARY C
+        if (useGearyC) {
+          double gc = gearyC(y1, weightsE1);
+          // Scale to [0, 1]
+          gc = (2.0 - gc) / 2.0;
+          goodness[factorLevel] = gc * (wtSum[factorLevel]);
+        }
+        // MORAN I
+        else {
+          double mi = moranI(y1, weightsE1);
+          // Scale to [0, 1]
+          mi = (mi + 1.0) / 2.0;
+          goodness[factorLevel] = mi * (wtSum[factorLevel]);
+        }
+      }
 
-         // Scale to [0, 1]
-         mi = (mi + 1.0) / 2.0;
-         goodness[factorLevel] = mi * (wtSum[factorLevel]);
-       }
+      // E2
+      if ((n - wtSum[factorLevel]) > 1.0) {
+        NumericMatrix weightsE2 = getInvWeights(e2, distpower, islonglat);
 
-       // E2
-       if ((n - wtSum[factorLevel]) > 1.0) {
-         NumericMatrix weightsE2 = getInvWeights(e2, distpower, islonglat);
-         double mi = moranI(y2, weightsE2);
+        // GEARY C
+        if (useGearyC) {
+          double gc = gearyC(y2, weightsE2);
+          // Scale to [0, 1]
+          gc = (2.0 - gc) / 2.0;
+          goodness[factorLevel] += (gc * (n - wtSum[factorLevel]));
+        }
+        // MORAN I
+        else {
+          double mi = moranI(y2, weightsE2);
+          // Scale to [0, 1]
+          mi = (mi + 1.0) / 2.0;
+          goodness[factorLevel] += (mi * (n - wtSum[factorLevel]));
+        }
+      }
 
-         // Scale to [0, 1]
-         mi = (mi + 1.0) / 2.0;
-         goodness[factorLevel] += (mi * (n - wtSum[factorLevel]));
-       }
+      goodness[factorLevel] /= n;
+    }
+  }
 
-       goodness[factorLevel] /= n;
-     }
-   }
-
-   return goodness;
+  return goodness;
 }
 
 // Splitting by the shape of the regions

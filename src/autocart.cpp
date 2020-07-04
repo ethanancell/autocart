@@ -30,6 +30,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   bool standardizeLoss = true;
   bool givePredAsFactor = true;
   bool retainCoords = true;
+  bool useGearyC = false;
 
   // If there is a passed in autocartControl object, then modify the behavior of the splitting.
   if (control.isNotNull()) {
@@ -48,6 +49,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     standardizeLoss = as<bool>(autocartControl["standardizeloss"]);
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
     retainCoords = as<bool>(autocartControl["retainCoords"]);
+    useGearyC = as<bool>(autocartControl["useGearyC"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -57,12 +59,12 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss);
+  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss, _["useGearyC"] = useGearyC);
 
   // If the "givePredAsFactor" is set to true, then convert the prediction vector into a factor and label it from 1 to the number of regions
   // Construct the S3 object that contains information about the model
