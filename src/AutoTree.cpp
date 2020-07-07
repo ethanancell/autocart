@@ -28,12 +28,37 @@
 
 using namespace Rcpp;
 
-AutoTree::AutoTree() {
+// Set all the parameters for the tree creation
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_) {
   root = NULL;
+
+  // Error check the parameters
+  if (alpha_ < 0 || alpha_ > 1) {
+    stop("Creation of autotree failed. Alpha value not between 0 and 1.");
+  }
+  if (beta_ < 0 || beta_ > 1) {
+    stop("Creation of autotree failed. Beta value not between 0 and 1.");
+  }
+  if (alpha_ + beta_ > 1) {
+    stop("Creation of autotree failed. Alpha and beta can not sum to anything above 1.");
+  }
+  
+  // Set the autocart control parameters
+  alpha = alpha_;
+  beta = beta_;
+  minsplit = minsplit_;
+  minbucket = minbucket_;
+  maxdepth = maxdepth_;
+  distpower = distpower_;
+  islonglat = islonglat_;
+  standardizeLoss = standardizeLoss_;
+  useGearyC = useGearyC_;
+  spatialWeightsType = spatialWeightsType_;
+  spatialBandwidth = spatialBandwidth_;
 }
 
 // Kick off the splitting
-void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_) {
+void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations) {
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -44,15 +69,6 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     }
     if (locations.cols() != 2) {
       stop("Creation of autotree failed. Locations matrix should only have two columns.");
-    }
-    if (alpha < 0 || alpha > 1) {
-      stop("Creation of autotree failed. Alpha value not between 0 and 1.");
-    }
-    if (beta < 0 || beta > 1) {
-      stop("Creation of autotree failed. Beta value not between 0 and 1.");
-    }
-    if (alpha + beta > 1) {
-      stop("Creation of autotree failed. Alpha and beta can not sum to anything above 1.");
     }
 
     // Check to see if any NA, NaN, or Inf exists
@@ -82,15 +98,6 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       }
     }
 
-    // Set the autocart control parameters
-    minsplit = minsplit_;
-    minbucket = minbucket_;
-    maxdepth = maxdepth_;
-    distpower = distpower_;
-    islonglat = islonglat_;
-    standardizeLoss = standardizeLoss_;
-    useGearyC = useGearyC_;
-
     // Keep track of the # of DataFrame rows that were used to create the tree
     // (This is used for some types of stopping criteria)
     obsToCreate = response.size();
@@ -111,7 +118,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 
     // Create tree non-recursively using a stack
     std::stack<node*> treeCreationStack;
-    root = createNode(response, data, locations, alpha, beta, 0, response.size());
+    root = createNode(response, data, locations, 0, response.size());
 
     treeCreationStack.push(root);
     nodesInTree++;
@@ -149,8 +156,8 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Attempt to create a child if the size of the children is larger than zero, and if the observations
       // in this current node are larger than "minsplit"
       if (leftResponse.size() > 0 && rightResponse.size() > 0 && nextNode->obsInNode >= minsplit) {
-        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, alpha, beta, 0, leftResponse.size());
-        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, alpha, beta, 0, rightResponse.size());
+        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, 0, leftResponse.size());
+        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, 0, rightResponse.size());
       }
 
       if (leftnode != NULL && rightnode != NULL) {
@@ -179,13 +186,8 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 }
 
 // Recursive splitting function
-node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int level, int numObs) {
-  // Stopping criteria based on height of the tree
-  /*
-  if (numObs < sqrt(obsToCreate)) {
-    return NULL;
-  }
-  */
+node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, int level, int numObs) {
+
   // Stop if we have maxdepth or less than the minimum observations allowed in the tree
   if (level > maxdepth) {
     return NULL;
@@ -211,11 +213,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     bool splitByCat;
     // The data might be categorical date, in which case we need a different splitting function.
     if (Rf_isFactor(data[column])) {
-      goodnessVector = splitCategorical(response, data[column], locations, alpha, beta);
+      goodnessVector = splitCategorical(response, data[column], locations);
       splitByCat = true;
     }
     else {
-      goodnessVector = split(response, data[column], locations, alpha, beta);
+      goodnessVector = split(response, data[column], locations);
       splitByCat = false;
     }
 
@@ -287,7 +289,7 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
 
   // Get the morans I for this group
   double groupMoranI = 0;
-  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat);
+  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
   groupMoranI = moranI(response, nodeWeights);
 
   // Get Geary's C for this group
@@ -303,7 +305,7 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
  * with goodness values. The goodness value at location "i" evaluates the split
  * from 1:i vs i+1:n, where n is the length of the response/x_vector.
  */
-NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations, double alpha, double beta) {
+NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations) {
 
   int n = response.size();
   NumericVector wt(n, 1.0);
@@ -336,7 +338,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
   }
   if (alpha > 0) {
-    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, wt, minbucket, distpower, islonglat, useGearyC);
+    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
   }
   if (beta > 0) {
     t3 = continuousGoodnessBySize(x, orderedLocations, wt, minbucket, islonglat);
@@ -356,7 +358,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
  * with goodness values. The goodness value at location "i" evaluates the group containing factor i vs
  * the group not containing factor i.
  */
- NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, double alpha, double beta) {
+ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations) {
 
    // Make a weights vector. This should probably be modified later, but for now
    // it will be a vector of ones.
@@ -376,7 +378,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
      t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
    }
    if (alpha > 0) {
-     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, wt, minbucket, distpower, islonglat, useGearyC);
+     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
    }
    if (beta > 0) {
      t3 = categoricalGoodnessBySize(x_vector, locations, wt, minbucket, islonglat);
@@ -612,11 +614,43 @@ double findMax(NumericVector x) {
 }
 
 
-// Various getters and setters
+// getters and setters
+double AutoTree::getAlpha() {
+  return alpha;
+}
+double AutoTree::getBeta() {
+  return beta;
+}
 int AutoTree::getNumTerminalNodes() {
   return numTerminalNodes;
 }
-
+int AutoTree::getMinSplit() {
+  return minsplit;
+}
+int AutoTree::getMinBucket() {
+  return minbucket;
+}
+int AutoTree::getMaxDepth() {
+  return maxdepth;
+}
+int AutoTree::getDistPower() {
+  return distpower;
+}
+bool AutoTree::getIsLongLat() {
+  return islonglat;
+}
+bool AutoTree::getStandardizeLoss() {
+  return standardizeLoss;
+}
+bool AutoTree::isGearyC() {
+  return useGearyC;
+}
+double AutoTree::getSpatialBandwidth() {
+  return spatialBandwidth;
+}
+SpatialWeights::Type AutoTree::getSpatialWeightsType() {
+  return spatialWeightsType;
+}
 
 // Destroyal
 AutoTree::~AutoTree()

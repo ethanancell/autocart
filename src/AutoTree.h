@@ -33,6 +33,14 @@ struct node {
   node* right;
 };
 
+/* This enumeration is used for the different spatial weighting options */
+namespace SpatialWeights {
+  enum Type { 
+    Regular, 
+    Gaussian 
+  };
+}
+
 /* Various helper methods */
 double findMax(NumericVector x);
 
@@ -42,18 +50,29 @@ double findMax(NumericVector x);
  */
 class AutoTree {
 public:
-  AutoTree();
+  AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_);
   ~AutoTree();
+
   void destroyTree();
-  void createTree(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_);
+  void createTree(NumericVector response, DataFrame data, NumericMatrix locations);
 
   DataFrame createSplitDataFrame();
-
   double predictObservation(NumericVector predictors);
   NumericVector predictDataFrame(DataFrame data);
 
   // Getters / Setters
   int getNumTerminalNodes();
+  int getMinSplit();
+  int getMinBucket();
+  int getMaxDepth();
+  int getDistPower();
+  bool getIsLongLat();
+  bool getStandardizeLoss();
+  bool isGearyC();
+  double getAlpha();
+  double getBeta();
+  double getSpatialBandwidth();
+  SpatialWeights::Type getSpatialWeightsType();
 
 private:
   node* root;
@@ -69,13 +88,17 @@ private:
   bool islonglat;
   bool standardizeLoss;
   bool useGearyC;
+  double alpha;
+  double beta;
+  double spatialBandwidth;
+  SpatialWeights::Type spatialWeightsType;
 
   void destroyTree(node* leaf);
-  node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, int level, int numObs);
+  node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, int level, int numObs);
+  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations);
+  NumericVector splitCategorical(NumericVector response, IntegerVector x, NumericMatrix locations);
 
-  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, double alpha, double beta);
-  NumericVector splitCategorical(NumericVector response, IntegerVector x, NumericMatrix locations, double alpha, double beta);
-
+  // Output
   void inorderPrint();
   void inorderPrint(node* leaf, int level);
   void preorderPrint();

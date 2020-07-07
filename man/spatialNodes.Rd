@@ -7,7 +7,13 @@ distance weighting to interpolate. The prediction for the new data that is passe
 by making a prediction to assign it to a group. Next, the residual for the new prediction is
 formed by inverse distance weighting the residual for the other points that are a part of that geometry.}
 \usage{
-spatialNodes(autocartModel, newdata, newdataCoords, distpower = 2)
+spatialNodes(
+  autocartModel,
+  newdata,
+  newdataCoords,
+  distpower = 2,
+  decideByGC = FALSE
+)
 }
 \arguments{
 \item{autocartModel}{an autocart model returned from the \code{autocart} function.}
@@ -17,6 +23,8 @@ spatialNodes(autocartModel, newdata, newdataCoords, distpower = 2)
 \item{newdataCoords}{a matrix of coordinates for all the predictors contained in \code{newdata}}
 
 \item{distpower}{the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.}
+
+\item{decideByGC}{When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?}
 }
 \value{
 a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}

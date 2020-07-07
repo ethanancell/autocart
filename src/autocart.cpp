@@ -18,7 +18,9 @@ using namespace Rcpp;
 //' @export
 // [[Rcpp::export]]
 List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
-  AutoTree tree;
+
+  // Obviously make sure this is FALSE when in production
+  bool debugOutput = false;
 
   // Default values for splitting parameters
   int minsplit = 20;
@@ -32,6 +34,11 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   bool retainCoords = true;
   bool useGearyC = false;
 
+  SpatialWeights::Type spatialWeightsType = SpatialWeights::Regular;
+  std::string spatialWeightsExtract = "default";
+  double spatialBandwidthProportion = 1.0;
+  double spatialBandwidth;
+
   // If there is a passed in autocartControl object, then modify the behavior of the splitting.
   if (control.isNotNull()) {
     List autocartControl = as<List>(control);
@@ -42,7 +49,6 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
 
     minsplit = as<int>(autocartControl["minsplit"]);
     minbucket = as<int>(autocartControl["minbucket"]);
-    //xval = as<int>(autocartControl["xval"]);
     maxdepth = as<int>(autocartControl["maxdepth"]);
     distpower = as<int>(autocartControl["distpower"]);
     islonglat = as<bool>(autocartControl["islonglat"]);
@@ -50,6 +56,54 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
     retainCoords = as<bool>(autocartControl["retainCoords"]);
     useGearyC = as<bool>(autocartControl["useGearyC"]);
+
+    // Find out which of "spatialBandwidth" or "spatialBandwidthProportion" was supplied. Use the supplied
+    // argument to induce the other one.
+    // ------------------------------------
+    // To do so, we need the maximum distance from any point to any other point upfront.
+    double maxDistance;
+    if (islonglat) {
+      Function dist("rdist.earth");
+      NumericMatrix distances = dist(locations);
+      maxDistance = max(distances);
+    }
+    else {
+      Function dist("rdist");
+      NumericMatrix distances = dist(locations);
+      maxDistance = max(distances);
+    }
+    if (debugOutput) {
+      Rcout << "Maximum distance in locations matrix is " << maxDistance << std::endl;
+    }
+    // Assign to the NULL spatialBandwidth or spatialBandwidthProportion
+    NumericVector temp1 = autocartControl["spatialBandwidth"];
+    NumericVector temp2 = autocartControl["spatialBandwidthProportion"];
+    if (temp1.length() < 1) {
+      spatialBandwidthProportion = as<double>(autocartControl["spatialBandwidthProportion"]);
+      spatialBandwidth = maxDistance * spatialBandwidthProportion;
+      if (debugOutput) {
+        Rcout << "Based upon value of " << spatialBandwidthProportion << ", setting spatialBandwidth to " << spatialBandwidth << std::endl;
+      }
+    }
+    else if (temp2.length() < 1) {
+      spatialBandwidth = as<double>(autocartControl["spatialBandwidth"]);
+      spatialBandwidthProportion = spatialBandwidth / maxDistance;
+      if (debugOutput) {
+        Rcout << "Based upon value of " << spatialBandwidth << ", setting spatialBandwidthProportion to " << spatialBandwidthProportion << std::endl;
+      }
+    }
+
+    // Assign the weighting type supplied to the enumeration in autotree.h
+    spatialWeightsExtract = as<std::string>(autocartControl["spatialWeightsType"]);
+    if (spatialWeightsExtract.compare("default") == 0) {
+      spatialWeightsType = SpatialWeights::Regular;
+    }
+    else if (spatialWeightsExtract.compare("gaussian") == 0) {
+      spatialWeightsType = SpatialWeights::Gaussian;
+    }
+    else {
+      stop("Can't create autocart tree. Unrecognized spatial weighting scheme.");
+    }
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -59,12 +113,13 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  tree.createTree(response, data, locations, alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth);
+  tree.createTree(response, data, locations);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss, _["useGearyC"] = useGearyC);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss, _["useGearyC"] = useGearyC, _["spatialWeightsType"] = spatialWeightsExtract, _["spatialBandwidth"] = spatialBandwidth);
 
   // If the "givePredAsFactor" is set to true, then convert the prediction vector into a factor and label it from 1 to the number of regions
   // Construct the S3 object that contains information about the model

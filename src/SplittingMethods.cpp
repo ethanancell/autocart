@@ -7,7 +7,10 @@
  */
 
 #include <Rcpp.h>
+#include <math.h>
+#include "autotree.h"
 #include "spatialmethods.h"
+#include "splittingmethods.h"
 
 using namespace Rcpp;
 
@@ -15,13 +18,51 @@ using namespace Rcpp;
 // ========== HELPER FUNCTIONS ==========
 // ======================================
 
-/* This helper function will create a weights matrix for use with the Moran I
+/**
+ * In many cases we wish to retrieve our weights matrix, but we calculate the weights according to different methodologies.
+ * This function will select the appropriate weights matrix function and return that.
+ * @param locations A matrix of coordinates
+ * @param distpower the power to use on distance if using default weights
+ * @param islonglat Use great circle distance or not
+ * @param spatialBandwidth the maximum distance that we consider there to be any spatial influence
+ * @param spatialWeightsType the type of weights matrix calculation that we perform.
+ */
+NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+  NumericMatrix myWeights;
+  
+  switch (spatialWeightsType) {
+    case SpatialWeights::Regular:
+    {
+      myWeights = getDefaultWeightsMatrix(locations, distpower, islonglat, spatialBandwidth);
+      break;
+    }
+    case SpatialWeights::Gaussian:
+    {
+      myWeights = getGaussianWeightsMatrix(locations, islonglat, spatialBandwidth);
+      break;
+    }
+    default:
+    {
+      stop("In \"getWeightsMatrix\" method, trying to use a weighting type that is not registered.");
+    }
+  }
+
+  return myWeights;
+}
+
+/**
+ * This helper function will create a weights matrix for use with the Moran I
  * function or otherwise. It takes a matrix of locations, a power to use with
  * distance (i.e. inverse distance squared), and whether it is longitude and
  * latitude coordinates (use Great circle distance or not?). It will return
  * an inverse distance based weights matrix.
+ * @param locations The matrix of coordaintes used in the spatial weighting
+ * @param islonglat A boolean indicating if the coordiantes are longitude/latitude
+ * @param distpower The power to use in distance, such as distance squared.
+ * @param spatialBandwidth Past this distance, we assume zero spatial influence and set it to 0
+ * @return A spatial weights matrix that uses inverse distance.
  */
-NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat) {
+NumericMatrix getDefaultWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth) {
   int n = locations.nrow();
   NumericMatrix weights;
   if (islonglat) {
@@ -34,11 +75,51 @@ NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islo
   }
   for (int i=0; i<n; i++) {
     for (int j=0; j<n; j++) {
-      if (distpower != 1) {
-        weights(i, j) = pow(weights(i, j), distpower);
+      if (weights(i, j) < spatialBandwidth) {
+        // Apply the power then flip if on a non-diagonal
+        if (distpower != 1) {
+          weights(i, j) = pow(weights(i, j), distpower);
+        }
+        if (i != j) {
+          weights(i, j) = 1.0 / weights(i, j);
+        }
       }
-      if (i != j) {
-        weights(i, j) = 1.0 / weights(i, j);
+      else {
+        weights(i, j) = 0.0;
+      }
+    }
+  }
+
+  return weights;
+}
+
+/**
+ * Return a spatial weights matrix that uses Gaussian weighting and a bandwidth.
+ * @param locations The matrix of coordinates used in the spatial weighting
+ * @param islonglat A boolean indicating if the coordinates in "locations" are longitude and latitude coordinates to be used with great circle distance
+ * @param spatialBandwidth A double with the maximum distance where a spatial effect is said to occur
+ * @return A spatial weights matrix that uses Gaussian weighting and a bandwidth.
+ */
+NumericMatrix getGaussianWeightsMatrix(NumericMatrix locations, bool islonglat, double spatialBandwidth) {
+  int n = locations.nrow();
+  NumericMatrix weights;
+  if (islonglat) {
+    Function gcd("rdist.earth");
+    weights = gcd(locations);
+  }
+  else {
+    Function ed("rdist");
+    weights = ed(locations);
+  }
+  for (int i=0; i<n; i++) {
+    for (int j=0; j<n; j++) {
+      if (weights(i, j) < spatialBandwidth) {
+        double thisDistance = weights(i, j);
+        weights(i, j) = exp( (-1 * pow(thisDistance, 2.0)) / (pow(spatialBandwidth, 2.0)) );
+      }
+      else {
+        // We assume no influence past the bandwidth
+        weights(i, j) = 0.0;
       }
     }
   }
@@ -85,14 +166,15 @@ NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector
 }
 
 // Calculate Moran's I statistic for each of the two halves
-NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC) {
+NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
 
   // Order the locations matrix rows in the same order as x.
   int n = response.size();
 
   NumericVector goodness(n-1, 0.0);
 
-  NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat);
+  // TODO: Trace
+  NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
 
   // Using the minbucket parameter, we can only calculate the splits which start at
   // "minbucket-1", and then only calculate up to "n-minbucket"
@@ -263,7 +345,7 @@ NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVecto
 }
 
 // Spatial autocorrelation splitting
-NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC) {
+NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
 
   // Useful information that will be used by splitting
   CharacterVector lvls = x_vector.attr("levels");
@@ -325,7 +407,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
       // E1
       // Skip if only one observation with this factor
       if (wtSum[factorLevel] > 1.0) {
-        NumericMatrix weightsE1 = getInvWeights(e1, distpower, islonglat);
+        NumericMatrix weightsE1 = getWeightsMatrix(e1, distpower, islonglat, spatialBandwidth, spatialWeightsType);
       
         // GEARY C
         if (useGearyC) {
@@ -345,7 +427,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
 
       // E2
       if ((n - wtSum[factorLevel]) > 1.0) {
-        NumericMatrix weightsE2 = getInvWeights(e2, distpower, islonglat);
+        NumericMatrix weightsE2 = getWeightsMatrix(e2, distpower, islonglat, spatialBandwidth, spatialWeightsType);
 
         // GEARY C
         if (useGearyC) {

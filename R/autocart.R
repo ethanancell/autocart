@@ -9,12 +9,18 @@
 #' @param givePredAsFactor In the returned autocart model, should the prediction vector also be returned as a factor?
 #' @param retainCoords After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?
 #' @param useGearyC Should autocart use Geary's C instead of Moran's I in the splitting function?
-#' @return An object passed in to the \code{autocart} function that controls the splitting
+#' @param spatialWeightsType What type of spatial weighting should be used when calculating spatial autocorrelation? Options are "default" or "gaussian".
+#' @param spatialBandwidthProportion What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}
+#' @param spatialBandwidth What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.
+#' @return An object passed in to the \code{autocart} function that controls the splitting.
 #'
 #' @export
-autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30, distpower = 1, islonglat = TRUE, standardizeloss = TRUE, givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE) {
+autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
+                            distpower = 1, islonglat = TRUE, standardizeloss = TRUE,
+                            givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE,
+                            spatialWeightsType = "default", spatialBandwidthProportion = 1, spatialBandwidth = NULL) {
 
-  # Error check the user input
+  # Check the TYPES on the user input
   if (!is.numeric(minsplit)) {
     stop("\"minsplit\" parameter must be a numeric or integer.")
   }
@@ -39,11 +45,49 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   if (!is.logical(useGearyC)) {
     stop("\"useGearyC\" parameter must be logical.")
   }
+  if (!is.character(spatialWeightsType)) {
+    stop("\"spatialWeightsType\" must be a valid character type.")
+  }
+  if (!is.null(spatialBandwidthProportion) & !is.numeric(spatialBandwidthProportion)) {
+    stop("\"spatialBandwidthProportion\" must be numeric.")
+  }
+  if (!is.null(spatialBandwidth)& !is.numeric(spatialBandwidth)) {
+    stop("\"spatialBandwidth\" must be numeric.")
+  }
+
+  # This is the allowable set of weighting types
+  validSpatialWeightings <- c("default", "gaussian")
+
+  if (!(spatialWeightsType %in% validSpatialWeightings)) {
+    stop("spatial weighting type not recognized.")
+  }
+
+  # The user must only supply one of spatialBandwidthProportion and spatialBandwidth
+  if (!missing(spatialBandwidthProportion) & !missing(spatialBandwidth)) {
+    stop("User must only supply one of \"spatialBandwidthProportion\" and \"spatialBandwidth\"")
+  }
+
+  # If they only supply spatialBandwidth, then we want to set the proportion to NULL so that the autocart
+  # function knows to use the user-overridden spatialBandwidth parameter
+  if (!missing(spatialBandwidth) & missing(spatialBandwidthProportion)) {
+    spatialBandwidthProportion <- NULL
+  }
 
   # if the user specifies only minbucket, then the splitting function will have
   # issues without an appropriately set minsplit
   if (missing(minsplit) && !missing(minbucket)) {
     minsplit <- minbucket * 3
+  }
+
+  if (!(is.null(spatialBandwidth))) {
+    if (spatialBandwidth < 0) {
+      stop("\"spatialBandwidth\" can not be negative.")
+    }
+  }
+  if (!is.null(spatialBandwidthProportion)) {
+    if ((spatialBandwidthProportion < 0 | spatialBandwidthProportion > 1)) {
+      stop("\"spatialBandwidthProportion\" must be between 0 and 1.")
+    }
   }
 
   minsplit = as.integer(minsplit)
@@ -55,6 +99,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   givePredAsFactor = as.logical(givePredAsFactor)
   retainCoords = as.logical(retainCoords)
   useGearyC = as.logical(useGearyC)
+  spatialWeightsType = as.character(spatialWeightsType)
+  spatialBandwidth = as.numeric(spatialBandwidth)
+  spatialBandwidthProportion = as.numeric(spatialBandwidthProportion)
 
   control <- list(
     minsplit = minsplit,
@@ -65,7 +112,10 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     standardizeloss = standardizeloss,
     givePredAsFactor = givePredAsFactor,
     retainCoords = retainCoords,
-    useGearyC = useGearyC
+    useGearyC = useGearyC,
+    spatialWeightsType = spatialWeightsType,
+    spatialBandwidthProportion = spatialBandwidthProportion,
+    spatialBandwidth = spatialBandwidth
   )
 
   # Set the name for the control object

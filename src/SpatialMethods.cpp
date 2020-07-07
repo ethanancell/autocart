@@ -79,61 +79,29 @@ double moranI(NumericVector response, NumericMatrix weights) {
    * the speed of calculations of Moran's I by doubling the sum of the values on the
    * upper diagonal of the matrix
    */
-  bool isSymmetricMatrix = true;
-  // Run this if you can assume that it is symmetric. This will speed up the addition
-  // of values by twice the speed.
-  // TODO: Actually implement this.
-  if (isSymmetricMatrix) {
-    // Numerator calculations
-    double numerator = 0;
-    for (int i=0; i<nObs; i++) {
-      for (int j=0; j<nObs; j++) {
-        numerator += weights(i, j) * (response[i] - responseMean) * (response[j] - responseMean);
-      }
+  // Numerator calculations
+  double numerator = 0;
+  for (int i=0; i<nObs; i++) {
+    for (int j=0; j<nObs; j++) {
+      numerator += weights(i, j) * (response[i] - responseMean) * (response[j] - responseMean);
     }
-    numerator *= nObs;
-
-    // Denominator calculations
-    double sumWeights = 0;
-    for (int i=0; i<nObs; i++) {
-      for (int j=0; j<nObs; j++) {
-        sumWeights += weights(i, j);
-      }
-    }
-    double denominator = 0;
-    for (int i=0; i<nObs; i++) {
-      denominator += pow(response[i] - responseMean, 2);
-    }
-    denominator *= sumWeights;
-
-    return numerator / denominator;
   }
-  // Calculate using ALL values of the matrix
-  else {
-    // Numerator calculations
-    double numerator = 0;
-    for (int i=0; i<nObs; i++) {
-      for (int j=0; j<nObs; j++) {
-        numerator += weights(i, j) * (response[i] - responseMean) * (response[j] - responseMean);
-      }
-    }
-    numerator *= nObs;
+  numerator *= nObs;
 
-    // Denominator calculations
-    double sumWeights = 0;
-    for (int i=0; i<nObs; i++) {
-      for (int j=0; j<nObs; j++) {
-        sumWeights += weights(i, j);
-      }
+  // Denominator calculations
+  double sumWeights = 0;
+  for (int i=0; i<nObs; i++) {
+    for (int j=0; j<nObs; j++) {
+      sumWeights += weights(i, j);
     }
-    double denominator = 0;
-    for (int i=0; i<nObs; i++) {
-      denominator += pow(response[i] - responseMean, 2);
-    }
-    denominator *= sumWeights;
-
-    return numerator / denominator;
   }
+  double denominator = 0;
+  for (int i=0; i<nObs; i++) {
+    denominator += pow(response[i] - responseMean, 2);
+  }
+  denominator *= sumWeights;
+
+  return numerator / denominator;
 }
 
 /* Another alternative measure of spatial autocorrelation that is more sensitive to local spatial autocorrelation rather than

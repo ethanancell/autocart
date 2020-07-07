@@ -12,7 +12,11 @@ autocartControl(
   islonglat = TRUE,
   standardizeloss = TRUE,
   givePredAsFactor = TRUE,
-  retainCoords = TRUE
+  retainCoords = TRUE,
+  useGearyC = FALSE,
+  spatialWeightsType = "default",
+  spatialBandwidthProportion = 1,
+  spatialBandwidth = NULL
 )
 }
 \arguments{
@@ -31,9 +35,17 @@ autocartControl(
 \item{givePredAsFactor}{In the returned autocart model, should the prediction vector also be returned as a factor?}
 
 \item{retainCoords}{After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?}
+
+\item{useGearyC}{Should autocart use Geary's C instead of Moran's I in the splitting function?}
+
+\item{spatialWeightsType}{What type of spatial weighting should be used when calculating spatial autocorrelation? Options are "default" or "gaussian".}
+
+\item{spatialBandwidthProportion}{What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}}
+
+\item{spatialBandwidth}{What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.}
 }
 \value{
-An object passed in to the \code{autocart} function that controls the splitting
+An object passed in to the \code{autocart} function that controls the splitting.
 }
 \description{
 Create the object used for the controlling of the splits in the autocart model
