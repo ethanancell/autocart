@@ -6,13 +6,15 @@
 #' @param autocartModel an autocart model returned from the \code{autocart} function.
 #' @param newdata a dataframe that contains the same predictors that were used to form the tree.
 #' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
+#' @param method The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
 #' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
 #' @import fields
+#' @import stats
 #' @export
-spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2, decideByGC = FALSE) {
+spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2, decideByGC = FALSE) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
@@ -29,6 +31,12 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2, d
   }
   if (nrow(newdata) != nrow(newdataCoords)) {
     stop("The number of rows in newdata and newdataCoords are not the same.")
+  }
+
+  # Check to make sure that the method type is allowable
+  allowableMethods <- c("idw", "tps")
+  if (!(method %in% allowableMethods)) {
+    stop("\"method\" parameter is not a valid method.")
   }
 
   # If we are missing the decideByGC parameter, then we will use the splitting parameter that was used
@@ -79,22 +87,32 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, distpower = 2, d
     }
 
     if (spatialProcessExists) {
-      # Get a distance matrix from this point to all other points in the geometry
-      if (islonglat) {
-        distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
-      } else {
-        distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+
+      # IDW
+      if (method == "idw") {
+        # Get a distance matrix from this point to all other points in the geometry
+        if (islonglat) {
+          distToAllGeomPoints <- fields::rdist.earth(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+        } else {
+          distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
+        }
+
+        invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
+        weights <- as.vector(invDistMatrix)
+        sumWeights <- sum(weights)
+
+        # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
+        residualVector <- thisGeometry$actual - thisGeometry$pred
+        predictedResidual <- sum(weights * residualVector) / sumWeights
+
+        returnPredictions[row] <- returnPredictions[row] + predictedResidual
+      } else if (method == "tps") {
+        # TPS
+        residualVector <- thisGeometry$actual - thisGeometry$pred
+        fit <- fields::Tps(thisGeometryCoordinates, residualVector)
+
+        returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
       }
-
-      invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
-      weights <- as.vector(invDistMatrix)
-      sumWeights <- sum(weights)
-
-      # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
-      residualVector <- thisGeometry$actual - thisGeometry$pred
-      predictedResidual <- sum(weights * residualVector) / sumWeights
-
-      returnPredictions[row] <- returnPredictions[row] + predictedResidual
     }
   }
 

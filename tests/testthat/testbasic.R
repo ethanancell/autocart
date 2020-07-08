@@ -34,9 +34,14 @@ test_that("Autocart returns sensical output", {
   snow <- snow[1:datasize, ]
   locations <- locations[1:datasize, ]
 
-  model <- autocart(response, snow, locations, alpha, beta, autocartControl(distpower=2))
+  # Set a spatial bandwidth
+  myControl <- autocartControl(distpower = 2,
+                               spatialWeightsType = "gaussian",
+                               spatialBandwidthProportion = 0.1)
 
-  # TESTING
+  model <- autocart(response, snow, locations, alpha, beta, myControl)
+
+   # TESTING
   expect_is(model$prediction, "numeric")
   expect_equal(length(model$prediction), length(response))
   expect_equal(model$prediction, predictAutocart(model, snow))

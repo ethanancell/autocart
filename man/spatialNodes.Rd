@@ -11,6 +11,7 @@ spatialNodes(
   autocartModel,
   newdata,
   newdataCoords,
+  method = "idw",
   distpower = 2,
   decideByGC = FALSE
 )
@@ -21,6 +22,8 @@ spatialNodes(
 \item{newdata}{a dataframe that contains the same predictors that were used to form the tree.}
 
 \item{newdataCoords}{a matrix of coordinates for all the predictors contained in \code{newdata}}
+
+\item{method}{The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.}
 
 \item{distpower}{the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.}
 
