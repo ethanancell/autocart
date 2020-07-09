@@ -148,7 +148,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     NumericVector y = locations(_, 1);
     DataFrame coords;
     if (islonglat) {
-      coords = DataFrame::create(_["long"] = x, _["lat"] = y, _["pred"] = prediction, _["actual"] = response);
+      coords = DataFrame::create(_["x"] = x, _["y"] = y, _["pred"] = prediction, _["actual"] = response);
     }
     else {
       coords = DataFrame::create(_["x"] = x, _["y"] = y, _["pred"] = prediction, _["actual"] = response);

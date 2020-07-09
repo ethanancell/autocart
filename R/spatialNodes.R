@@ -71,7 +71,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   # then inverse distance weight each of the observations in that spatial process
   for (row in 1:length(whichLayer)) {
     thisGeometry <- leafGeometryList[[which(levels(predFactor) == whichLayer[row])]]
-    thisGeometryCoordinates <- as.matrix(cbind(thisGeometry$long, thisGeometry$lat))
+    thisGeometryCoordinates <- as.matrix(cbind(thisGeometry$x, thisGeometry$y))
 
     # Only use a spatial effect if a spatial effect exists in this node. If no spatial effect exists, just predict
     # using the average of this node.
