@@ -12,6 +12,7 @@
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
 #' @import fields
+#' @import mgcv
 #' @import stats
 #' @export
 spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2, decideByGC = FALSE) {
@@ -83,7 +84,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
     if (decideByGC) {
       spatialProcessExists <- thisTerminalNode$gc < thisTerminalNode$expectedGc
     } else {
-      spatialProcessExists <- thisTerminalNode$mi < thisTerminalNode$expectedMi
+      spatialProcessExists <- thisTerminalNode$mi > thisTerminalNode$expectedMi
     }
 
     if (spatialProcessExists) {
@@ -109,9 +110,21 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
       } else if (method == "tps") {
         # TPS
         residualVector <- thisGeometry$actual - thisGeometry$pred
-        fit <- fields::Tps(thisGeometryCoordinates, residualVector)
+        browser()
 
-        returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        if (islonglat) {
+          # For TPS there exists another type for spherical data.
+          #fit <- fields::Tps(thisGeometryCoordinates, residualVector)
+          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+          myData <- as.data.frame(cbind(thisGeometryCoordinates, resp = residualVector))
+          #fit <- mgcv::gam(resp ~ s(V1, V2, bs = "sos"), data = myData)
+          fit <- mgcv::gam(resp ~ s(V1, V2), data = myData)
+          returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        } else {
+          # Use regular TPS
+          fit <- fields::Tps(thisGeometryCoordinates, residualVector)
+          returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        }
       }
     }
   }
