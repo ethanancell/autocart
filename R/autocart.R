@@ -10,6 +10,7 @@
 #' @param retainCoords After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?
 #' @param useGearyC Should autocart use Geary's C instead of Moran's I in the splitting function?
 #' @param spatialWeightsType What type of spatial weighting should be used when calculating spatial autocorrelation? Options are "default" or "gaussian".
+#' @param customSpatialWeights Use this parameter to pass in an optional spatial weights matrix for use in autocorrelation calculations. Must have nrow and ncol equal to rows in training dataframe.
 #' @param spatialBandwidthProportion What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}
 #' @param spatialBandwidth What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.
 #' @return An object passed in to the \code{autocart} function that controls the splitting.
@@ -18,7 +19,8 @@
 autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
                             distpower = 1, islonglat = TRUE, standardizeloss = TRUE,
                             givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE,
-                            spatialWeightsType = "default", spatialBandwidthProportion = 1, spatialBandwidth = NULL) {
+                            spatialWeightsType = "default", customSpatialWeights = NULL,
+                            spatialBandwidthProportion = 1, spatialBandwidth = NULL) {
 
   # Check the TYPES on the user input
   if (!is.numeric(minsplit)) {
@@ -48,6 +50,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   if (!is.character(spatialWeightsType)) {
     stop("\"spatialWeightsType\" must be a valid character type.")
   }
+  if (!is.null(customSpatialWeights) & !is.numeric(customSpatialWeights)) {
+    stop("\"customSpatialWeights\" must be a numeric type.")
+  }
   if (!is.null(spatialBandwidthProportion) & !is.numeric(spatialBandwidthProportion)) {
     stop("\"spatialBandwidthProportion\" must be numeric.")
   }
@@ -62,15 +67,31 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     stop("spatial weighting type not recognized.")
   }
 
+  # Weights has to be a matrix
+  if (!is.null(customSpatialWeights) & !is.matrix(customSpatialWeights)) {
+    stop("\"customSpatialWeights\" must be a matrix.")
+  }
+
   # The user must only supply one of spatialBandwidthProportion and spatialBandwidth
   if (!missing(spatialBandwidthProportion) & !missing(spatialBandwidth)) {
     stop("User must only supply one of \"spatialBandwidthProportion\" and \"spatialBandwidth\"")
+  }
+
+  # If the user supplies both a weighting scheme or their own weights matrix, that's a problem.
+  if (!missing(spatialWeightsType) & !missing(customSpatialWeights)) {
+    warning("Ambiguous weighting scheme: \"spatialWeightsType\" will be overriden with the supplied custom spatial weights.")
   }
 
   # If they only supply spatialBandwidth, then we want to set the proportion to NULL so that the autocart
   # function knows to use the user-overridden spatialBandwidth parameter
   if (!missing(spatialBandwidth) & missing(spatialBandwidthProportion)) {
     spatialBandwidthProportion <- NULL
+  }
+
+  # If they only supply customSpatialWeights, then we want to set the weighting type to NULL so that autocart
+  # knows to not calculate its own weight matrix
+  if (!missing(customSpatialWeights)) {
+    spatialWeightsType <- "custom"
   }
 
   # if the user specifies only minbucket, then the splitting function will have
@@ -114,6 +135,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     retainCoords = retainCoords,
     useGearyC = useGearyC,
     spatialWeightsType = spatialWeightsType,
+    customSpatialWeights = customSpatialWeights,
     spatialBandwidthProportion = spatialBandwidthProportion,
     spatialBandwidth = spatialBandwidth
   )

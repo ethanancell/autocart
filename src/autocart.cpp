@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include "autotree.h"
-#include "spatialmethods.h"
+#include "SpatialMethods.h"
+#include "SplittingMethods.h"
 
 using namespace Rcpp;
 
@@ -25,7 +26,6 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   // Default values for splitting parameters
   int minsplit = 20;
   int minbucket = 7;
-  //int xval = 10;
   int maxdepth = 30;
   int distpower = 1;
   bool islonglat = true;
@@ -39,7 +39,10 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   double spatialBandwidthProportion = 1.0;
   double spatialBandwidth;
 
-  // If there is a passed in autocartControl object, then modify the behavior of the splitting.
+  NumericMatrix spatialWeightsMatrix;
+  NumericMatrix distanceMatrix;
+
+  // Extract info from autocartControl
   if (control.isNotNull()) {
     List autocartControl = as<List>(control);
     // Make sure it inherits the autocartControl class
@@ -57,6 +60,12 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     retainCoords = as<bool>(autocartControl["retainCoords"]);
     useGearyC = as<bool>(autocartControl["useGearyC"]);
 
+    // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
+    // the code will crash.
+    if (minbucket >= minsplit / 2) {
+      stop("The minbucket parameter should not be above half of minsplit.");
+    }
+
     // Find out which of "spatialBandwidth" or "spatialBandwidthProportion" was supplied. Use the supplied
     // argument to induce the other one.
     // ------------------------------------
@@ -64,17 +73,18 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     double maxDistance;
     if (islonglat) {
       Function dist("rdist.earth");
-      NumericMatrix distances = dist(locations);
-      maxDistance = max(distances);
+      distanceMatrix = dist(locations);
+      maxDistance = max(distanceMatrix);
     }
     else {
       Function dist("rdist");
-      NumericMatrix distances = dist(locations);
-      maxDistance = max(distances);
+      distanceMatrix = dist(locations);
+      maxDistance = max(distanceMatrix);
     }
     if (debugOutput) {
       Rcout << "Maximum distance in locations matrix is " << maxDistance << std::endl;
     }
+
     // Assign to the NULL spatialBandwidth or spatialBandwidthProportion
     NumericVector temp1 = autocartControl["spatialBandwidth"];
     NumericVector temp2 = autocartControl["spatialBandwidthProportion"];
@@ -93,7 +103,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
       }
     }
 
-    // Assign the weighting type supplied to the enumeration in autotree.h
+    // Extract the type of weighting we wish to do
     spatialWeightsExtract = as<std::string>(autocartControl["spatialWeightsType"]);
     if (spatialWeightsExtract.compare("default") == 0) {
       spatialWeightsType = SpatialWeights::Regular;
@@ -101,19 +111,67 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     else if (spatialWeightsExtract.compare("gaussian") == 0) {
       spatialWeightsType = SpatialWeights::Gaussian;
     }
+    else if (spatialWeightsExtract.compare("custom") == 0) {
+      spatialWeightsType = SpatialWeights::Custom;
+    }
     else {
       stop("Can't create autocart tree. Unrecognized spatial weighting scheme.");
     }
 
-    // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
-    // the code will crash.
-    if (minbucket >= minsplit / 2) {
-      stop("The minbucket parameter should not be above half of minsplit.");
+    // Assign to spatialWeightsMatrix IF it is supplied. If not, then create your own
+    Rcpp::Nullable<Rcpp::NumericMatrix> suppliedWeightsMatrix = autocartControl["customSpatialWeights"];
+    if (!suppliedWeightsMatrix.isNotNull()) {
+      if (debugOutput) {
+        Rcout << "No custom supplied weights matrix!" << std::endl;
+      }
+      spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+    }
+    else {
+      if (debugOutput) {
+        Rcout << "Custom supplied weights matrix!" << std::endl;
+      }
+      spatialWeightsMatrix = as<Rcpp::NumericMatrix>(suppliedWeightsMatrix);
     }
   }
 
+  // NO AUTOCART CONTROL SUPPLIED
+  else {
+    double maxDistance;
+    if (islonglat) {
+      // Distance matrix
+      Function dist("rdist.earth");
+      distanceMatrix = dist(locations);
+      maxDistance = max(distanceMatrix);
+      spatialBandwidth = spatialBandwidthProportion * maxDistance;
+    }
+    else {
+      // Distance matrix
+      Function dist("rdist");
+      distanceMatrix = dist(locations);
+      maxDistance = max(distanceMatrix);
+      spatialBandwidth = spatialBandwidthProportion * maxDistance;
+    }
+
+    // Spatial weights matrix
+    spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+  }
+
+  // Error check spatialWeightsMatrix
+  if (spatialWeightsMatrix.nrow() != spatialWeightsMatrix.ncol()) {
+    stop("Spatial weights matrix must have ncol equal to nrow.");
+  }
+  if (distanceMatrix.nrow() != distanceMatrix.ncol()) {
+    stop("Distance matrix must have ncol equal to nrow.");
+  }
+  if (distanceMatrix.nrow() != spatialWeightsMatrix.nrow()) {
+    stop("distanceMatrix and spatialWeightsMatrix must have the same number of rows and columns.");
+  }
+  if (distanceMatrix.nrow() != locations.nrow()) {
+    stop("locations, distanceMatrix, and spatialWeightsMatrix must have the same number of rows.");
+  }
+
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
   tree.createTree(response, data, locations);
 
   // List members
@@ -190,12 +248,21 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
     }
   }
 
+  // Make sure that all the names of the columns in newdata align with the column names in the tree itself
+  // TODO: THIS
+  /*
+  CharacterVector newdataColumnNames = newdata.names();
+  for (int j=0; j<newdataColumnNames.size(); j++) {
+    if (!)
+  }
+  */
+
   NumericVector predictionVector;
   DataFrame splitFrame = as<DataFrame>(autocartModel["splitframe"]);
 
   // Keep copies of all the columns in splitFrame as Rcpp forces us to unpack them
   // at every step anyway
-  IntegerVector column = splitFrame["column"];
+  CharacterVector column = splitFrame["column"];
   NumericVector splitValue = splitFrame["splitvalue"];
   IntegerVector category = splitFrame["category"];
   IntegerVector leftLoc = splitFrame["leftloc"];
@@ -216,7 +283,8 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
         int compareFactor = category[splittingRow];
 
         // Get the value in newdata to compare to the above
-        IntegerVector newdataSplitColumn = newdata[column[splittingRow]];
+        String searchColumnName = column[splittingRow];
+        IntegerVector newdataSplitColumn = newdata[searchColumnName];
         int myFactor = newdataSplitColumn[row];
 
         // For both directions, subtract 1 from what's store in leftloc/rightloc
@@ -235,7 +303,8 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
         double compareValue = splitValue[splittingRow];
 
         // Get the value in newdata to compare to the above
-        NumericVector newdataSplitColumn = newdata[column[splittingRow]];
+        String searchColumnName = column[splittingRow];
+        NumericVector newdataSplitColumn = newdata[searchColumnName];
         double myValue = newdataSplitColumn[row];
 
         // For both directions, we subtract one from what's stored in

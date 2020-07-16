@@ -166,7 +166,7 @@ NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector
 }
 
 // Calculate Moran's I statistic for each of the two halves
-NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
 
   // Order the locations matrix rows in the same order as x.
   int n = response.size();
@@ -174,7 +174,7 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
   NumericVector goodness(n-1, 0.0);
 
   // TODO: Trace
-  NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+  //NumericMatrix allWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
 
   // Using the minbucket parameter, we can only calculate the splits which start at
   // "minbucket-1", and then only calculate up to "n-minbucket"
@@ -182,8 +182,8 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
   //for (int splitLocation = 0; splitLocation < n-1; splitLocation++) {
   for (int splitLocation = minbucket-1; splitLocation < n-minbucket; splitLocation++) {
     // Get the E1 and E2 partitions
-    NumericMatrix e1 = locations(Range(0, splitLocation), Rcpp::Range(0, 1));
-    NumericMatrix e2 = locations(Range(splitLocation+1, n-1), Rcpp::Range(0, 1));
+    //NumericMatrix e1 = locations(Range(0, splitLocation), Rcpp::Range(0, 1));
+    //NumericMatrix e2 = locations(Range(splitLocation+1, n-1), Rcpp::Range(0, 1));
     NumericVector y1 = response[Range(0, splitLocation)];
     NumericVector y2 = response[Range(splitLocation+1, n-1)];
 
@@ -192,7 +192,8 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
     // leave it at the default value of 0)
     if (splitLocation != 0) {
       //NumericMatrix weightsE1 = getInvWeights(e1, distpower, islonglat);
-      NumericMatrix weightsE1 = allWeights(Range(0, splitLocation), Range(0, splitLocation));
+      //NumericMatrix weightsE1 = allWeights(Range(0, splitLocation), Range(0, splitLocation));
+      NumericMatrix weightsE1 = spatialWeightsMatrix(Range(0, splitLocation), Range(0, splitLocation));
       
       // GEARY C
       if (useGearyC) {
@@ -214,7 +215,8 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
     // (As in E2, skip over splitLocation == n-2 where only one observation exists)
     if (splitLocation != n-2) {
       //NumericMatrix weightsE2 = getInvWeights(e2, distpower, islonglat);
-      NumericMatrix weightsE2 = allWeights(Range(splitLocation+1, n-1), Range(splitLocation+1, n-1));
+      //NumericMatrix weightsE2 = allWeights(Range(splitLocation+1, n-1), Range(splitLocation+1, n-1));
+      NumericMatrix weightsE2 = spatialWeightsMatrix(Range(splitLocation+1, n-1), Range(splitLocation+1, n-1));
 
       // GEARY C
       if (useGearyC) {
@@ -239,12 +241,13 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
 }
 
 // Use the size of the regions to encourage grouped up observations
-NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, bool islonglat) {
+NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat) {
 
   int n = x_vector.size();
   NumericVector goodness(x_vector.size()-1, 0.0);
 
   // Get distance matrix according to whether this is longlat or projected
+  /*
   Function greatCircleDistance("rdist.earth");
   Function euclidDistMatrix("rdist");
   NumericMatrix allDistances;
@@ -254,6 +257,7 @@ NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix loc
   else {
     allDistances = euclidDistMatrix(locations);
   }
+  */
 
   // Total sum of squares (denominator in ultimate goodness value)
   // start j at i, as counting the other triangular half of the matrix
@@ -261,7 +265,8 @@ NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix loc
   double TSS = 0.0;
   for (int i=0; i<n; i++) {
     for (int j=i; j<n; j++) {
-      TSS += pow(allDistances(i, j), 2);
+      //TSS += pow(allDistances(i, j), 2);
+      TSS += pow(distanceMatrix(i, j), 2);
     }
   }
 
@@ -271,7 +276,8 @@ NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix loc
   // spot.
 
   for (int splitLocation = minbucket-1; splitLocation < n-minbucket; splitLocation++) {
-    NumericMatrix distancesAcross = allDistances(Range(0, splitLocation), Range(splitLocation+1, n-1));
+    //NumericMatrix distancesAcross = allDistances(Range(0, splitLocation), Range(splitLocation+1, n-1));
+    NumericMatrix distancesAcross = distanceMatrix(Range(0, splitLocation), Range(splitLocation+1, n-1));
 
     // Using the identity that sum(pairwise(A->B)) + sum(pairwise(A->A)) + sum(pairwise(B->B)) = sum(pairwise(all))
     // High goodness = high values is good splits. To minimize the pairwise differences within regions,
@@ -345,7 +351,7 @@ NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVecto
 }
 
 // Spatial autocorrelation splitting
-NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
 
   // Useful information that will be used by splitting
   CharacterVector lvls = x_vector.attr("levels");
@@ -453,7 +459,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
 }
 
 // Splitting by the shape of the regions
-NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix locations, NumericVector wt, int minbucket, bool islonglat) {
+NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat) {
   // Find size
   CharacterVector lvls = x_vector.attr("levels");
   int numLevels = lvls.size();

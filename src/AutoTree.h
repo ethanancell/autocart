@@ -13,7 +13,8 @@ using namespace Rcpp;
 struct node {
   double key;
   int factor;
-  int column;
+  //int column;
+  String column;
   int obsInNode;
   double prediction;
   bool isTerminalNode;
@@ -23,6 +24,7 @@ struct node {
   NumericVector response;
   DataFrame data;
   NumericMatrix locations;
+  IntegerVector weightsIndices;
 
   // Evaluation measures at each node
   double RSS;
@@ -35,14 +37,16 @@ struct node {
 
 /* This enumeration is used for the different spatial weighting options */
 namespace SpatialWeights {
-  enum Type { 
-    Regular, 
-    Gaussian 
+  enum Type {
+    Regular,
+    Gaussian,
+    Custom
   };
 }
 
 /* Various helper methods */
 double findMax(NumericVector x);
+NumericMatrix matrixSubsetCells(NumericMatrix x, IntegerVector rIndex, IntegerVector cIndex);
 
 /*
  * The AutoTree class contains the organization of all the decision rules
@@ -50,7 +54,7 @@ double findMax(NumericVector x);
  */
 class AutoTree {
 public:
-  AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_);
+  AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_);
   ~AutoTree();
 
   void destroyTree();
@@ -93,10 +97,14 @@ private:
   double spatialBandwidth;
   SpatialWeights::Type spatialWeightsType;
 
+  // We keep a copy of the spatial weights matrix and distance matrix for use throughout the splitting
+  NumericMatrix globalSpatialWeightsMatrix;
+  NumericMatrix globalDistanceMatrix;
+
   void destroyTree(node* leaf);
-  node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, int level, int numObs);
-  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations);
-  NumericVector splitCategorical(NumericVector response, IntegerVector x, NumericMatrix locations);
+  node* createNode(NumericVector response, DataFrame data, NumericMatrix locations, IntegerVector weightsIndices, int level, int numObs);
+  NumericVector split(NumericVector response, NumericVector x, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix);
+  NumericVector splitCategorical(NumericVector response, IntegerVector x, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix);
 
   // Output
   void inorderPrint();

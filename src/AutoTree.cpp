@@ -29,7 +29,7 @@
 using namespace Rcpp;
 
 // Set all the parameters for the tree creation
-AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_) {
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
   root = NULL;
 
   // Error check the parameters
@@ -42,7 +42,7 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   if (alpha_ + beta_ > 1) {
     stop("Creation of autotree failed. Alpha and beta can not sum to anything above 1.");
   }
-  
+
   // Set the autocart control parameters
   alpha = alpha_;
   beta = beta_;
@@ -55,6 +55,8 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   useGearyC = useGearyC_;
   spatialWeightsType = spatialWeightsType_;
   spatialBandwidth = spatialBandwidth_;
+  globalDistanceMatrix = globalDistanceMatrix_;
+  globalSpatialWeightsMatrix = globalSpatialWeightsMatrix_;
 }
 
 // Kick off the splitting
@@ -104,21 +106,30 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     Function subset("subset");
 
     DataFrame nodeData;
-    NumericVector nodeResponse;
-    NumericMatrix nodeLocations;
-    NumericVector splitColumnVector;
-    LogicalVector isLeft;
-    NumericVector leftResponse;
-    NumericVector rightResponse;
     DataFrame leftDataFrame;
     DataFrame rightDataFrame;
+
+    NumericVector nodeResponse;
+    NumericVector leftResponse;
+    NumericVector rightResponse;
+
+    NumericMatrix nodeLocations;
     NumericMatrix leftLocations;
     NumericMatrix rightLocations;
+
+    IntegerVector weightsIndices = Rcpp::Range(0, response.size()-1);
+    IntegerVector leftWeightsIndices;
+    IntegerVector rightWeightsIndices;
+
+    NumericVector splitColumnVector;
+    LogicalVector isLeft;
     bool isCategoricalSplit;
 
     // Create tree non-recursively using a stack
     std::stack<node*> treeCreationStack;
-    root = createNode(response, data, locations, 0, response.size());
+    root = createNode(response, data, locations, weightsIndices, 0, response.size());
+
+    //Rcout << "do I run?" << std::endl;
 
     treeCreationStack.push(root);
     nodesInTree++;
@@ -131,6 +142,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       nodeData = nextNode->data;
       nodeResponse = nextNode->response;
       nodeLocations = nextNode->locations;
+      weightsIndices = nextNode->weightsIndices;
       isCategoricalSplit = nextNode->isCategoricalSplit;
 
       splitColumnVector = nodeData[nextNode->column];
@@ -149,6 +161,16 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       rightDataFrame = subset(nodeData, !isLeft);
       leftLocations = subset(nodeLocations, isLeft);
       rightLocations = subset(nodeLocations, !isLeft);
+      leftWeightsIndices = weightsIndices[isLeft];
+      rightWeightsIndices = weightsIndices[!isLeft];
+
+      // TODO: Delete this
+      /*
+      Rcout << "This node: " << weightsIndices << std::endl;
+      Rcout << "Left: " << leftWeightsIndices << std::endl;
+      Rcout << "Right: " << rightWeightsIndices << std::endl;
+      Rcout << "----------\n\n";
+      */
 
       node* leftnode = NULL;
       node* rightnode = NULL;
@@ -156,8 +178,8 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Attempt to create a child if the size of the children is larger than zero, and if the observations
       // in this current node are larger than "minsplit"
       if (leftResponse.size() > 0 && rightResponse.size() > 0 && nextNode->obsInNode >= minsplit) {
-        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, 0, leftResponse.size());
-        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, 0, rightResponse.size());
+        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, leftWeightsIndices, 0, leftResponse.size());
+        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, rightWeightsIndices, 0, rightResponse.size());
       }
 
       if (leftnode != NULL && rightnode != NULL) {
@@ -186,7 +208,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 }
 
 // Recursive splitting function
-node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, int level, int numObs) {
+node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, IntegerVector weightsIndices, int level, int numObs) {
 
   // Stop if we have maxdepth or less than the minimum observations allowed in the tree
   if (level > maxdepth) {
@@ -197,13 +219,30 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   }
 
   // Loop through all the columns, finding the best split
-  int bestColumn = 0;
+  String bestColumn = 0;
   int bestSplit = 0;
   double maxGoodness = 0;
   bool betterSplitFound = false;
   bool bestSplitIsCategorical = false;
 
-  for (int column=0; column<data.length(); column++) {
+  // Construct the weights/distance matrix for this node based off the indices
+  NumericMatrix spatialWeightsMatrix = matrixSubsetCells(globalSpatialWeightsMatrix, weightsIndices, weightsIndices);
+  NumericMatrix distanceMatrix = matrixSubsetCells(globalDistanceMatrix, weightsIndices, weightsIndices);
+
+  /*
+  int a = spatialWeightsMatrix.nrow();
+  int b = spatialWeightsMatrix.ncol();
+  int c = distanceMatrix.nrow();
+  int d = distanceMatrix.ncol();
+  Rcout << "spatialWeightsMatrix: " << a << " x " << b << std::endl;
+  Rcout << "distanceMatrix: " << c << " x " << d << std::endl;
+  */
+
+  CharacterVector dataframeNames = data.names();
+  for (int columnIndex=0; columnIndex<data.length(); columnIndex++) {
+
+    String column = dataframeNames[columnIndex];
+
     /* We find the "goodness" vector returned by the splitting function.
      * if there is a goodness value that is better than the best one we have,
      * then we make a note of the column we are splitting on, the location of the split,
@@ -213,11 +252,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     bool splitByCat;
     // The data might be categorical date, in which case we need a different splitting function.
     if (Rf_isFactor(data[column])) {
-      goodnessVector = splitCategorical(response, data[column], locations);
+      goodnessVector = splitCategorical(response, data[column], locations, spatialWeightsMatrix, distanceMatrix);
       splitByCat = true;
     }
     else {
-      goodnessVector = split(response, data[column], locations);
+      goodnessVector = split(response, data[column], locations, spatialWeightsMatrix, distanceMatrix);
       splitByCat = false;
     }
 
@@ -296,7 +335,7 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   double groupGearyC = gearyC(response, nodeWeights);
 
   int obsInNode = response.size();
-  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, RSS, groupMoranI, groupGearyC, NULL, NULL};
+  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, weightsIndices, RSS, groupMoranI, groupGearyC, NULL, NULL};
 
   return newnode;
 }
@@ -305,13 +344,16 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
  * with goodness values. The goodness value at location "i" evaluates the split
  * from 1:i vs i+1:n, where n is the length of the response/x_vector.
  */
-NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations) {
+NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix) {
 
   int n = response.size();
   NumericVector wt(n, 1.0);
   NumericVector y = clone(response);
   NumericVector x = clone(x_vector);
+
   NumericMatrix orderedLocations(n, 2);
+  NumericMatrix orderedSpatialWeightsMatrix = Rcpp::no_init(n, n);
+  NumericMatrix orderedDistanceMatrix = Rcpp::no_init(n, n);
 
   // The three terms used in the splitting
   // t1: reduction in variance
@@ -333,15 +375,34 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     orderedLocations(slotLocation, _) = locations(i, _);
   }
 
+  // Order the weights/distance matrices in the same order as x_order
+  for (int i=0; i<n; i++) {
+    for (int j=0; j<n; j++) {
+      orderedSpatialWeightsMatrix(i, j) = spatialWeightsMatrix(x_order[i], x_order[j]);
+      orderedDistanceMatrix(i, j) = distanceMatrix(x_order[i], x_order[j]);
+    }
+  }
+
+  // Delete this
+  /*
+  Rcout << "response: " << response.size() << std::endl;
+  int a = orderedSpatialWeightsMatrix.nrow();
+  int b = orderedSpatialWeightsMatrix.ncol();
+  int c = orderedDistanceMatrix.nrow();
+  int d = orderedDistanceMatrix.ncol();
+  Rcout << "orderedSpatialWeightsMatrix: " << a << " x " << b << std::endl;
+  Rcout << "orderedDistanceMatrix: " << c << " x " << d << std::endl;
+  */
+
   // Only compute non-zero coefficients
   if ((alpha+beta) < 1) {
     t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
   }
   if (alpha > 0) {
-    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
   }
   if (beta > 0) {
-    t3 = continuousGoodnessBySize(x, orderedLocations, wt, minbucket, islonglat);
+    t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
   }
 
   // If standardization parameter is set, then for each of {t1, t2, t3}
@@ -358,7 +419,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
  * with goodness values. The goodness value at location "i" evaluates the group containing factor i vs
  * the group not containing factor i.
  */
- NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations) {
+ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix) {
 
    // Make a weights vector. This should probably be modified later, but for now
    // it will be a vector of ones.
@@ -378,10 +439,10 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
      t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
    }
    if (alpha > 0) {
-     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
    }
    if (beta > 0) {
-     t3 = categoricalGoodnessBySize(x_vector, locations, wt, minbucket, islonglat);
+     t3 = categoricalGoodnessBySize(x_vector, locations, distanceMatrix, wt, minbucket, islonglat);
    }
 
    // Return the linear combination of goodness values
@@ -403,11 +464,27 @@ double AutoTree::predictObservation(NumericVector predictors) {
   iterNode = root;
   while (!iterNode->isTerminalNode) {
     // travel down the children according to the split
-    int splitColumn = iterNode->column;
+    std::string splitColumn = iterNode->column;
+
+    // "containsElementNamed()" requires a C style string for some reason...
+    char* splitColumnCstr = new char[splitColumn.length()+1];
+    std::strcpy(splitColumnCstr, splitColumn.c_str());
+
+    // Make sure that it exists in the predictors
+    if (!predictors.containsElementNamed(splitColumnCstr)) {
+      CharacterVector pNames = predictors.names();
+      Rcout << "The variable named " << splitColumn << " does not exist in predictors." << std::endl;
+      Rcout << "Predictors: " << pNames << std::endl;
+      stop("Can not proceed with predictions.");
+    }
+
+    delete[] splitColumnCstr;
+    int columnIndex = predictors.offset(splitColumn);
+
     if (iterNode->isCategoricalSplit) {
       int splitFactor = iterNode->factor;
 
-      if (predictors[splitColumn] == splitFactor) {
+      if (predictors[columnIndex] == splitFactor) {
         iterNode = iterNode->right;
       }
       else {
@@ -417,7 +494,7 @@ double AutoTree::predictObservation(NumericVector predictors) {
     else {
       double splitValue = iterNode->key;
 
-      if (predictors[splitColumn] <= splitValue) {
+      if (predictors[columnIndex] <= splitValue) {
         iterNode = iterNode->left;
       }
       else {
@@ -439,11 +516,15 @@ NumericVector AutoTree::predictDataFrame(DataFrame data) {
   int nRows = data.nrows();
   int nCols = data.size();
   NumericVector predictions(nRows);
+  CharacterVector dataNames = data.names();
+
   for (int i=0; i<nRows; i++) {
-    NumericVector x(nCols);
+
+    NumericVector x;
     for (int j=0; j<nCols; j++) {
-      NumericVector column = data[j];
-      x[j] = column[i];
+      String thisColumnName = dataNames[j];
+      NumericVector columnData = data[j];
+      x.push_back(columnData[i], thisColumnName);
     }
     double result = predictObservation(x);
     predictions[i] = result;
@@ -473,7 +554,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // These vectors will make up the columns in the splitting dataframe
-  IntegerVector column(nodesInTree);
+  CharacterVector column(nodesInTree);
   NumericVector splitvalue(nodesInTree);
   IntegerVector category(nodesInTree);
   IntegerVector numobs(nodesInTree);
@@ -521,7 +602,7 @@ DataFrame AutoTree::createSplitDataFrame() {
     // Expected value of Moran's I is calculated as -1 / (N-1)
     expectedMi[thisRow] = -1.0 / (nextNode->obsInNode - 1);
 
-    // The expected value of Geary's C is always going to be 1. The only reason to include it is so that 
+    // The expected value of Geary's C is always going to be 1. The only reason to include it is so that
     // I stay consistent with including the expected value of Moran's I in the datatable and I don't want to expect
     // that users of the package know that E(C) = 1
     expectedGc[thisRow] = 1.0;
@@ -591,7 +672,8 @@ void AutoTree::printNode(node* x) {
   else {
     Rcout << "Key: " << x->key << std::endl;
   }
-  Rcout << "Column: " << x->column << std::endl;
+  std::string columnName = x->column;
+  Rcout << "Column: " << columnName << std::endl;
   Rcout << "Obs in Node: " << x->obsInNode << std::endl;
 }
 
@@ -611,6 +693,21 @@ double findMax(NumericVector x) {
     }
   }
   return maximum;
+}
+
+// Matrix subsetting
+NumericMatrix matrixSubsetCells(NumericMatrix x, IntegerVector rIndex, IntegerVector cIndex) {
+  int nRowOut = rIndex.size();
+  int nColOut = cIndex.size();
+
+  NumericMatrix out = Rcpp::no_init(nRowOut, nColOut);
+  for (int i=0; i<nRowOut; i++) {
+    for (int j=0; j<nColOut; j++) {
+      out(i, j) = x(rIndex[i], cIndex[j]);
+    }
+  }
+
+  return out;
 }
 
 

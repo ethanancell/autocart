@@ -2,9 +2,12 @@
 
 export(autocart)
 export(autocartControl)
+export(autoforest)
 export(predictAutocart)
+export(predictAutoforest)
 export(spatialNodes)
 import(fields)
+import(mgcv)
 import(stats)
 importFrom(Rcpp,sourceCpp)
 useDynLib(autocart, .registration = TRUE)

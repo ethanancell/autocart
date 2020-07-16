@@ -64,6 +64,7 @@ double moranI(NumericVector response, NumericMatrix weights) {
     stop("Weights matrix supplied to moranI function is not a square matrix.");
   }
   if (response.size() != weights.cols()) {
+    Rcout << "Response length: " << response.size() << ", weights matrix size: " << weights.nrow() << std::endl;
     stop("In moranI function, the response vector length is not the same as the matrix.");
   }
 

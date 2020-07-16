@@ -100,13 +100,25 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
         invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
         weights <- as.vector(invDistMatrix)
-        sumWeights <- sum(weights)
-
-        # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
         residualVector <- thisGeometry$actual - thisGeometry$pred
-        predictedResidual <- sum(weights * residualVector) / sumWeights
 
-        returnPredictions[row] <- returnPredictions[row] + predictedResidual
+        # If an infinite value exists, then we have the exact same location as something that was
+        # used to train the model, in which case we should borrow that observation's value for prediction.
+        if (any(is.infinite(weights))) {
+          whereInfinite <- which(is.infinite(weights))
+          if (length(whereInfinite > 1)) {
+            whereInfinite <- whereInfinite[1]
+          }
+          returnPredictions[row] <- returnPredictions[row] + residualVector[whereInfinite]
+
+        } else {
+          sumWeights <- sum(weights)
+
+          # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
+          predictedResidual <- sum(weights * residualVector) / sumWeights
+
+          returnPredictions[row] <- returnPredictions[row] + predictedResidual
+        }
       } else if (method == "tps") {
         # TPS
         residualVector <- thisGeometry$actual - thisGeometry$pred

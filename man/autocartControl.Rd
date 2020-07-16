@@ -15,6 +15,7 @@ autocartControl(
   retainCoords = TRUE,
   useGearyC = FALSE,
   spatialWeightsType = "default",
+  customSpatialWeights = NULL,
   spatialBandwidthProportion = 1,
   spatialBandwidth = NULL
 )
@@ -39,6 +40,8 @@ autocartControl(
 \item{useGearyC}{Should autocart use Geary's C instead of Moran's I in the splitting function?}
 
 \item{spatialWeightsType}{What type of spatial weighting should be used when calculating spatial autocorrelation? Options are "default" or "gaussian".}
+
+\item{customSpatialWeights}{Use this parameter to pass in an optional spatial weights matrix for use in autocorrelation calculations. Must have nrow and ncol equal to rows in training dataframe.}
 
 \item{spatialBandwidthProportion}{What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}}
 

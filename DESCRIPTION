@@ -1,7 +1,7 @@
 Package: autocart
 Type: Package
 Title: Modified Classification and Regression Trees for Spatial Autocorrelation
-Version: 1.1.2
+Version: 1.2.0
 Authors@R: person("Ethan", "Ancell", email = "ethanancell@gmail.com", role = c("aut", "cre"))
 Maintainer: Ethan Ancell <ethanancell@gmail.com>
 Description: An implementation of the classification and regression tree (CART) algorithm
@@ -11,7 +11,8 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends:
-    fields
+    fields,
+    mgcv
 Imports:
     Rcpp
 LinkingTo: Rcpp
