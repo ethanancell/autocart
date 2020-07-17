@@ -29,7 +29,7 @@
 using namespace Rcpp;
 
 // Set all the parameters for the tree creation
-AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
   root = NULL;
 
   // Error check the parameters
@@ -50,6 +50,7 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   minbucket = minbucket_;
   maxdepth = maxdepth_;
   distpower = distpower_;
+  maxobsMtxCalc = maxobsMtxCalc_;
   islonglat = islonglat_;
   standardizeLoss = standardizeLoss_;
   useGearyC = useGearyC_;
@@ -399,10 +400,14 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
   }
   if (alpha > 0) {
-    t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+    if (n <= maxobsMtxCalc) {
+      t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+    }
   }
   if (beta > 0) {
-    t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
+    if (n <= maxobsMtxCalc) {
+      t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
+    }
   }
 
   // If standardization parameter is set, then for each of {t1, t2, t3}
@@ -419,38 +424,44 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
  * with goodness values. The goodness value at location "i" evaluates the group containing factor i vs
  * the group not containing factor i.
  */
- NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix) {
+NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericMatrix distanceMatrix) {
 
-   // Make a weights vector. This should probably be modified later, but for now
-   // it will be a vector of ones.
-   NumericVector wt(response.size(), 1.0);
-   CharacterVector lvls = x_vector.attr("levels");
-   int numLevels = lvls.size();
+  int n = response.size();
 
-   // The three terms used in the splitting
-   // t1: reduction in variance
-   // t2: spatial autocorrelation
-   // t3: pairwise distances (size)
-   NumericVector t1(numLevels, 0.0);
-   NumericVector t2(numLevels, 0.0);
-   NumericVector t3(numLevels, 0.0);
+  // Make a weights vector. This should probably be modified later, but for now
+  // it will be a vector of ones.
+  NumericVector wt(response.size(), 1.0);
+  CharacterVector lvls = x_vector.attr("levels");
+  int numLevels = lvls.size();
 
-   if ((alpha+beta) < 1) {
-     t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
-   }
-   if (alpha > 0) {
-     t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
-   }
-   if (beta > 0) {
-     t3 = categoricalGoodnessBySize(x_vector, locations, distanceMatrix, wt, minbucket, islonglat);
-   }
+  // The three terms used in the splitting
+  // t1: reduction in variance
+  // t2: spatial autocorrelation
+  // t3: pairwise distances (size)
+  NumericVector t1(numLevels, 0.0);
+  NumericVector t2(numLevels, 0.0);
+  NumericVector t3(numLevels, 0.0);
 
-   // Return the linear combination of goodness values
-   t1 = (1-alpha-beta) * t1;
-   t2 = alpha * t2;
-   t3 = beta * t3;
-   return t1 + t2 + t3;
- }
+  if ((alpha+beta) < 1) {
+    t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
+  }
+  if (alpha > 0) {
+    if (n <= maxobsMtxCalc) {
+      t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+    }
+  }
+  if (beta > 0) {
+    if (n <= maxobsMtxCalc) {
+      t3 = categoricalGoodnessBySize(x_vector, locations, distanceMatrix, wt, minbucket, islonglat);
+    }
+  }
+
+  // Return the linear combination of goodness values
+  t1 = (1-alpha-beta) * t1;
+  t2 = alpha * t2;
+  t3 = beta * t3;
+  return t1 + t2 + t3;
+}
 
 /*
  * Return a prediction for a given observation. The input requires a
@@ -732,6 +743,9 @@ int AutoTree::getMaxDepth() {
 }
 int AutoTree::getDistPower() {
   return distpower;
+}
+int AutoTree::getMaxObsMtxCalc() {
+  return maxobsMtxCalc;
 }
 bool AutoTree::getIsLongLat() {
   return islonglat;

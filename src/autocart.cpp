@@ -1,5 +1,5 @@
 #include <Rcpp.h>
-#include "autotree.h"
+#include "AutoTree.h"
 #include "SpatialMethods.h"
 #include "SplittingMethods.h"
 
@@ -28,6 +28,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int minbucket = 7;
   int maxdepth = 30;
   int distpower = 1;
+  int maxobsMtxCalc = response.size();
   bool islonglat = true;
   bool standardizeLoss = true;
   bool givePredAsFactor = true;
@@ -64,6 +65,15 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     // the code will crash.
     if (minbucket >= minsplit / 2) {
       stop("The minbucket parameter should not be above half of minsplit.");
+    }
+
+    // If maxobsMtxCalc isn't supplied, then we should default it to be the size of all the data.
+    IntegerVector maxobsMtxCalcExtract = autocartControl["maxobsMtxCalc"];
+    if (maxobsMtxCalcExtract.length() < 1) {
+      maxobsMtxCalc = response.size();
+    }
+    else {
+      maxobsMtxCalc = maxobsMtxCalcExtract[0];
     }
 
     // Find out which of "spatialBandwidth" or "spatialBandwidthProportion" was supplied. Use the supplied
@@ -156,7 +166,13 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
   }
 
-  // Error check spatialWeightsMatrix
+  // ERROR CHECK
+  // ------------------
+  // maxobsMtxCalc
+  if ((alpha + beta == 1.0) && maxobsMtxCalc < response.size()) {
+    stop("When alpha+beta=1.0, all splitting is done by matrix calculations, so maxobsMtxCalc must be the size of all records in the data.");
+  }
+  // spatialWeightsMatrix
   if (spatialWeightsMatrix.nrow() != spatialWeightsMatrix.ncol()) {
     stop("Spatial weights matrix must have ncol equal to nrow.");
   }
@@ -171,7 +187,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
   tree.createTree(response, data, locations);
 
   // List members

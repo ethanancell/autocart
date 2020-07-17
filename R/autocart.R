@@ -3,6 +3,7 @@
 #' @param minsplit The minimum observations in a node before a split is attempted
 #' @param minbucket The minimum number of observations in a terminal node.
 #' @param maxdepth Set the maximum depth in the final tree. A root node is counted as a height of 0.
+#' @param maxobsMtxCalc Optional maximum number of observations in a node where computationally intensive matrix calculations like autocorrelation and compactness are performed.
 #' @param distpower The power of inverse distance to use when calculating spatial weights matrix.
 #' @param islonglat Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations
 #' @param standardizeloss Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?
@@ -17,7 +18,7 @@
 #'
 #' @export
 autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
-                            distpower = 1, islonglat = TRUE, standardizeloss = TRUE,
+                            maxobsMtxCalc = NULL, distpower = 1, islonglat = TRUE, standardizeloss = TRUE,
                             givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE,
                             spatialWeightsType = "default", customSpatialWeights = NULL,
                             spatialBandwidthProportion = 1, spatialBandwidth = NULL) {
@@ -56,8 +57,11 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   if (!is.null(spatialBandwidthProportion) & !is.numeric(spatialBandwidthProportion)) {
     stop("\"spatialBandwidthProportion\" must be numeric.")
   }
-  if (!is.null(spatialBandwidth)& !is.numeric(spatialBandwidth)) {
+  if (!is.null(spatialBandwidth) & !is.numeric(spatialBandwidth)) {
     stop("\"spatialBandwidth\" must be numeric.")
+  }
+  if (!is.null(maxobsMtxCalc) & !is.numeric(maxobsMtxCalc)) {
+    stop("\"maxobsMtxCalc\" argument must be a numeric number.")
   }
 
   # This is the allowable set of weighting types
@@ -115,6 +119,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   minbucket = as.integer(minbucket)
   maxdepth = as.integer(maxdepth)
   distpower = as.integer(distpower)
+  maxobsMtxCalc = as.integer(maxobsMtxCalc)
   islonglat = as.logical(islonglat)
   standardizeloss = as.logical(standardizeloss)
   givePredAsFactor = as.logical(givePredAsFactor)
@@ -129,6 +134,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     minbucket = minbucket,
     maxdepth = maxdepth,
     distpower = distpower,
+    maxobsMtxCalc = maxobsMtxCalc,
     islonglat = islonglat,
     standardizeloss = standardizeloss,
     givePredAsFactor = givePredAsFactor,

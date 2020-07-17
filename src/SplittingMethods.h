@@ -2,7 +2,7 @@
 #define AUTOCART_SPLITTINGMETHODS_H
 
 #include <Rcpp.h>
-#include "autotree.h"
+#include "AutoTree.h"
 using namespace Rcpp;
 
 // Helper

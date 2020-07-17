@@ -54,7 +54,7 @@ NumericMatrix matrixSubsetCells(NumericMatrix x, IntegerVector rIndex, IntegerVe
  */
 class AutoTree {
 public:
-  AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_);
+  AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_);
   ~AutoTree();
 
   void destroyTree();
@@ -70,6 +70,7 @@ public:
   int getMinBucket();
   int getMaxDepth();
   int getDistPower();
+  int getMaxObsMtxCalc();
   bool getIsLongLat();
   bool getStandardizeLoss();
   bool isGearyC();
@@ -89,6 +90,7 @@ private:
   int minbucket;
   int maxdepth;
   int distpower;
+  int maxobsMtxCalc;
   bool islonglat;
   bool standardizeLoss;
   bool useGearyC;

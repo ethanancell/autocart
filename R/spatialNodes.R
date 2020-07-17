@@ -8,6 +8,7 @@
 #' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
 #' @param method The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
+#' @param modelByResidual If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.
 #' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
@@ -15,7 +16,7 @@
 #' @import mgcv
 #' @import stats
 #' @export
-spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2, decideByGC = FALSE) {
+spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2, modelByResidual = TRUE, decideByGC = FALSE) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
@@ -66,7 +67,11 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
   # Find out which spatial process each new prediction belongs to
   whichLayer <- predictAutocart(autocartModel, newdata)
-  returnPredictions <- whichLayer
+  if (modelByResidual) {
+    returnPredictions <- whichLayer
+  } else {
+    returnPredictions <- rep(0, length(whichLayer))
+  }
 
   # For each row in the new data we wish to predict, find out which spatial process it is a part of
   # then inverse distance weight each of the observations in that spatial process
@@ -89,7 +94,6 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
     if (spatialProcessExists) {
 
-      # IDW
       if (method == "idw") {
         # Get a distance matrix from this point to all other points in the geometry
         if (islonglat) {
@@ -98,9 +102,15 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
           distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
         }
 
+        # Standard inverse distance weighting procedures
         invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
         weights <- as.vector(invDistMatrix)
-        residualVector <- thisGeometry$actual - thisGeometry$pred
+
+        if (modelByResidual) {
+          predictVector <- thisGeometry$actual - thisGeometry$pred
+        } else {
+          predictVector <- thisGeometry$actual
+        }
 
         # If an infinite value exists, then we have the exact same location as something that was
         # used to train the model, in which case we should borrow that observation's value for prediction.
@@ -109,34 +119,41 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
           if (length(whereInfinite > 1)) {
             whereInfinite <- whereInfinite[1]
           }
-          returnPredictions[row] <- returnPredictions[row] + residualVector[whereInfinite]
+          returnPredictions[row] <- returnPredictions[row] + predictVector[whereInfinite]
 
         } else {
           sumWeights <- sum(weights)
 
           # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
-          predictedResidual <- sum(weights * residualVector) / sumWeights
+          predictedValue <- sum(weights * predictVector) / sumWeights
 
-          returnPredictions[row] <- returnPredictions[row] + predictedResidual
+          returnPredictions[row] <- returnPredictions[row] + predictedValue
         }
       } else if (method == "tps") {
-        # TPS
-        residualVector <- thisGeometry$actual - thisGeometry$pred
-        browser()
+        # Thin-plate spline interpolation using the fields package
 
-        if (islonglat) {
+        if (modelByResidual) {
+          predictVector <- thisGeometry$actual - thisGeometry$pred
+        } else {
+          predictVector <- thisGeometry$actual
+        }
+
+        fit <- fields::Tps(thisGeometryCoordinates, predictVector)
+        returnPredictions[row] <- returnPredictions[row] + predict.Krig(fit, t(as.matrix(newdataCoords[row, ])))
+
+        #if (islonglat) {
           # For TPS there exists another type for spherical data.
           #fit <- fields::Tps(thisGeometryCoordinates, residualVector)
           #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-          myData <- as.data.frame(cbind(thisGeometryCoordinates, resp = residualVector))
+          #myData <- as.data.frame(cbind(thisGeometryCoordinates, resp = residualVector))
           #fit <- mgcv::gam(resp ~ s(V1, V2, bs = "sos"), data = myData)
-          fit <- mgcv::gam(resp ~ s(V1, V2), data = myData)
-          returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-        } else {
+          #fit <- mgcv::gam(resp ~ s(V1, V2), data = myData)
+          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        #} else {
           # Use regular TPS
-          fit <- fields::Tps(thisGeometryCoordinates, residualVector)
-          returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-        }
+          #fit <- fields::Tps(thisGeometryCoordinates, residualVector)
+          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        #}
       }
     }
   }
