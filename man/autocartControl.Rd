@@ -8,12 +8,13 @@ autocartControl(
   minsplit = 20,
   minbucket = round(minsplit/3),
   maxdepth = 30,
+  maxobsMtxCalc = NULL,
   distpower = 1,
   islonglat = TRUE,
-  standardizeloss = TRUE,
   givePredAsFactor = TRUE,
   retainCoords = TRUE,
   useGearyC = FALSE,
+  saddlepointApproximation = FALSE,
   spatialWeightsType = "default",
   customSpatialWeights = NULL,
   spatialBandwidthProportion = 1,
@@ -27,17 +28,19 @@ autocartControl(
 
 \item{maxdepth}{Set the maximum depth in the final tree. A root node is counted as a height of 0.}
 
+\item{maxobsMtxCalc}{Optional maximum number of observations in a node where computationally intensive matrix calculations like autocorrelation and compactness are performed.}
+
 \item{distpower}{The power of inverse distance to use when calculating spatial weights matrix.}
 
 \item{islonglat}{Are the coordinates longitude and latitude coordinates? If TRUE, then use great circle distance calculations}
-
-\item{standardizeloss}{Measures of autocorrelation, size, and reduction in variance carry a different distribution even though the code scales them between 0 and 1. Should they be standardized to be weighted equally?}
 
 \item{givePredAsFactor}{In the returned autocart model, should the prediction vector also be returned as a factor?}
 
 \item{retainCoords}{After creating the autocart model, should the coordinates for each of the predictions be kept in the returned model?}
 
 \item{useGearyC}{Should autocart use Geary's C instead of Moran's I in the splitting function?}
+
+\item{saddlepointApproximation}{Use the saddlepoint approximation to Moran's I. On large datasets this may reduce the compute time by a large amount.}
 
 \item{spatialWeightsType}{What type of spatial weighting should be used when calculating spatial autocorrelation? Options are "default" or "gaussian".}
 

@@ -8,8 +8,8 @@ test_that("Autocart returns sensical output", {
   snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
                 snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
   locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0.33
-  beta <- 0.33
+  alpha <- 0.80
+  beta <- 0.10
 
   # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
   # response so that the test ensures that factors can be used.
@@ -37,7 +37,8 @@ test_that("Autocart returns sensical output", {
   # Set a spatial bandwidth
   myControl <- autocartControl(distpower = 2,
                                spatialWeightsType = "gaussian",
-                               spatialBandwidthProportion = 0.1)
+                               #saddlepointApproximation = TRUE,
+                               spatialBandwidthProportion = 0.8)
 
   model <- autocart(response, snow, locations, alpha, beta, myControl)
 
@@ -123,3 +124,4 @@ test_that("autocartControl controls the tree correctly", {
     }
   }
 })
+

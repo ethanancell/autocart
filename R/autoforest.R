@@ -94,11 +94,15 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
 #' @param useSpatialNodes If TRUE, instead of running all the observations through the autocart tree, use the \code{spatialNodes} function to make predictions.
 #' @param method If using the spatial nodes type of prediction, then the type of interpolation to use. The options are "idw" and "tps".
 #' @param distpower If using "idw" for the method, the power on distance. For example, setting this to 2 would mean inverse squared distance squared weighting.
+#' @param distpowerRange If using "idw" for the interpolation method, the range of distance powers to use on inverse distance weighting matched to terminal node Moran I measurements.
+#' @param modelByResidual When using interpolation, make a prediction using the region of interest's average and then interpolate the residual.
 #' @param decideByGC Use Geary's C in deciding to induce a local spatial process rather than Moran's I.
 #' @return A vector of predictions that correspond to the rows in \code{newdata}.
 #'
 #' @export
-predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, useSpatialNodes = FALSE, method = "idw", distpower = 2, decideByGC = FALSE) {
+predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, useSpatialNodes = FALSE,
+                              method = "idw", distpower = 2, distpowerRange = c(0, 2),
+                              modelByResidual = TRUE, decideByGC = FALSE) {
 
   # Error check
   if (!inherits(autoforestModel, "autoforest")) {
@@ -119,10 +123,22 @@ predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, us
   if (ncol(newdataCoords) != 2) {
     stop("newdataCoords must have exactly two columns.")
   }
+  if (!is.numeric(distpowerRange)) {
+    stop("\"distpowerRange\" must be a numeric vector.")
+  }
+  if (length(distpowerRange) != 2) {
+    stop("\"distpowerRange\" must have exactly two elements.")
+  }
+  if (distpowerRange[2] <= distpowerRange[1]) {
+    stop("distpowerRange's second element must be greater than its first element.")
+  }
+  if (!missing(distpowerRange) & !missing(distpower)) {
+    stop("Both distpowerRange and distpower are provided in spatialNodes, this is ambiguous.")
+  }
 
   # Warnings
-  if (!useSpatialNodes & (!missing(method) | !missing(distpower) | !missing(decideByGC))) {
-    warning("Spatial nodes parameters \"method\", \"distpower\", and \"decideByGC\" are being ignored as useSpatialNodes is FALSE.")
+  if (!useSpatialNodes & (!missing(method) | !missing(distpower) | !missing(decideByGC) | !missing(distpowerRange) | !missing(modelByResidual))) {
+    warning("Spatial nodes parameters \"method\", \"distpower\" \"distpowerRange\", \"modelByResidual\", and \"decideByGC\" are being ignored as useSpatialNodes is FALSE.")
   }
 
 
@@ -132,7 +148,8 @@ predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, us
   } else {
     predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
                              newdataCoords = newdataCoords, method = method,
-                             distpower = distpower, decideByGC = decideByGC)
+                             distpower = distpower, distpowerRange = distpowerRange,
+                             modelByResidual = modelByResidual, decideByGC = decideByGC)
   }
 
 

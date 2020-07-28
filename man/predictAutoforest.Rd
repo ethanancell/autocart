@@ -11,6 +11,8 @@ predictAutoforest(
   useSpatialNodes = FALSE,
   method = "idw",
   distpower = 2,
+  distpowerRange = c(0, 2),
+  modelByResidual = TRUE,
   decideByGC = FALSE
 )
 }
@@ -26,6 +28,10 @@ predictAutoforest(
 \item{method}{If using the spatial nodes type of prediction, then the type of interpolation to use. The options are "idw" and "tps".}
 
 \item{distpower}{If using "idw" for the method, the power on distance. For example, setting this to 2 would mean inverse squared distance squared weighting.}
+
+\item{distpowerRange}{If using "idw" for the interpolation method, the range of distance powers to use on inverse distance weighting matched to terminal node Moran I measurements.}
+
+\item{modelByResidual}{When using interpolation, make a prediction using the region of interest's average and then interpolate the residual.}
 
 \item{decideByGC}{Use Geary's C in deciding to induce a local spatial process rather than Moran's I.}
 }

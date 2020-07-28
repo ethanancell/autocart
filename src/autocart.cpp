@@ -1,4 +1,6 @@
-#include <Rcpp.h>
+#include <RcppArmadillo.h>
+// [[Rcpp::depends(RcppArmadillo)]]
+
 #include "AutoTree.h"
 #include "SpatialMethods.h"
 #include "SplittingMethods.h"
@@ -16,6 +18,9 @@ using namespace Rcpp;
 //' @return An S3 object of class "autocart".
 //'
 //' @import fields
+//' @import spdep
+//' @import Matrix
+//' @importFrom RcppParallel RcppParallelLibs
 //' @export
 // [[Rcpp::export]]
 List autocart(NumericVector response, DataFrame data, NumericMatrix locations, double alpha, double beta, Rcpp::Nullable<Rcpp::List> control = R_NilValue) {
@@ -30,10 +35,10 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int distpower = 1;
   int maxobsMtxCalc = response.size();
   bool islonglat = true;
-  bool standardizeLoss = true;
   bool givePredAsFactor = true;
   bool retainCoords = true;
   bool useGearyC = false;
+  bool saddlepointApproximation = false;
 
   SpatialWeights::Type spatialWeightsType = SpatialWeights::Regular;
   std::string spatialWeightsExtract = "default";
@@ -56,10 +61,10 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     maxdepth = as<int>(autocartControl["maxdepth"]);
     distpower = as<int>(autocartControl["distpower"]);
     islonglat = as<bool>(autocartControl["islonglat"]);
-    standardizeLoss = as<bool>(autocartControl["standardizeloss"]);
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
     retainCoords = as<bool>(autocartControl["retainCoords"]);
     useGearyC = as<bool>(autocartControl["useGearyC"]);
+    saddlepointApproximation = as<bool>(autocartControl["saddlepointApproximation"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -186,14 +191,19 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     stop("locations, distanceMatrix, and spatialWeightsMatrix must have the same number of rows.");
   }
 
+  // Once saddlepoint approximation has been implemented, you can remove this warning right here
+  if (saddlepointApproximation == true) {
+    warning("The saddlepoint approximation to Moran's I is a loose end that has not been fully implemented in the autocart package, and will use exact Moran's I instead. To reduce computation time, consider the \"maxobsMtxCalc\" splitting parameter at the moment.");
+  }
+
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, standardizeLoss, useGearyC, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, useGearyC, saddlepointApproximation, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
   tree.createTree(response, data, locations);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["standardizeloss"] = standardizeLoss, _["useGearyC"] = useGearyC, _["spatialWeightsType"] = spatialWeightsExtract, _["spatialBandwidth"] = spatialBandwidth);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["useGearyC"] = useGearyC, _["spatialWeightsType"] = spatialWeightsExtract, _["spatialBandwidth"] = spatialBandwidth);
 
   // If the "givePredAsFactor" is set to true, then convert the prediction vector into a factor and label it from 1 to the number of regions
   // Construct the S3 object that contains information about the model
@@ -263,15 +273,6 @@ NumericVector predictAutocart(List autocartModel, DataFrame newdata) {
       }
     }
   }
-
-  // Make sure that all the names of the columns in newdata align with the column names in the tree itself
-  // TODO: THIS
-  /*
-  CharacterVector newdataColumnNames = newdata.names();
-  for (int j=0; j<newdataColumnNames.size(); j++) {
-    if (!)
-  }
-  */
 
   NumericVector predictionVector;
   DataFrame splitFrame = as<DataFrame>(autocartModel["splitframe"]);

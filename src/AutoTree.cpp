@@ -19,17 +19,19 @@
  *
  * @author Ethan Ancell
  */
-#include <Rcpp.h>
+#include <RcppArmadillo.h>
+// [[Rcpp::depends(RcppArmadillo)]]
+
 #include <math.h>
 #include <bits/stdc++.h>
-#include "autotree.h"
-#include "spatialmethods.h"
-#include "splittingmethods.h"
+#include "AutoTree.h"
+#include "SpatialMethods.h"
+#include "SplittingMethods.h"
 
 using namespace Rcpp;
 
 // Set all the parameters for the tree creation
-AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool standardizeLoss_, bool useGearyC_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool useGearyC_, bool saddlepointApproximation_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
   root = NULL;
 
   // Error check the parameters
@@ -52,7 +54,6 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   distpower = distpower_;
   maxobsMtxCalc = maxobsMtxCalc_;
   islonglat = islonglat_;
-  standardizeLoss = standardizeLoss_;
   useGearyC = useGearyC_;
   spatialWeightsType = spatialWeightsType_;
   spatialBandwidth = spatialBandwidth_;
@@ -62,6 +63,7 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
 
 // Kick off the splitting
 void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix locations) {
+
   if (root == NULL) {
     // Error check
     if (response.size() != data.nrows()) {
@@ -130,14 +132,17 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
     std::stack<node*> treeCreationStack;
     root = createNode(response, data, locations, weightsIndices, 0, response.size());
 
-    //Rcout << "do I run?" << std::endl;
-
     treeCreationStack.push(root);
     nodesInTree++;
     while (!treeCreationStack.empty()) {
       // Take the node off the stack and try to assign its children
       node* nextNode = treeCreationStack.top();
       treeCreationStack.pop();
+
+      // Error check
+      if (nextNode->isTerminalNode) {
+        stop("Error: trying to make a split on a node that has already been classified as a terminal node.");
+      }
 
       // Split the data according to what's contained in "nextNode"
       nodeData = nextNode->data;
@@ -165,37 +170,22 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       leftWeightsIndices = weightsIndices[isLeft];
       rightWeightsIndices = weightsIndices[!isLeft];
 
-      // TODO: Delete this
-      /*
-      Rcout << "This node: " << weightsIndices << std::endl;
-      Rcout << "Left: " << leftWeightsIndices << std::endl;
-      Rcout << "Right: " << rightWeightsIndices << std::endl;
-      Rcout << "----------\n\n";
-      */
+      // I have partitioned my data above. In any case, I want to create the nodes for
+      // both children. If a node happens to have numObs > minsplit, then I can push that
+      // node onto the stack in order to keep splitting it down. I will know that a node has
+      // numObs > minsplit if the returned node from "createNode" function is NOT a terminal node.
+      node* leftnode = createNode(leftResponse, leftDataFrame, leftLocations, leftWeightsIndices, 0, leftResponse.size());
+      node* rightnode = createNode(rightResponse, rightDataFrame, rightLocations, rightWeightsIndices, 0, rightResponse.size());
+      nodesInTree+=2;
 
-      node* leftnode = NULL;
-      node* rightnode = NULL;
+      nextNode->left = leftnode;
+      nextNode->right = rightnode;
 
-      // Attempt to create a child if the size of the children is larger than zero, and if the observations
-      // in this current node are larger than "minsplit"
-      if (leftResponse.size() > 0 && rightResponse.size() > 0 && nextNode->obsInNode >= minsplit) {
-        leftnode = createNode(leftResponse, leftDataFrame, leftLocations, leftWeightsIndices, 0, leftResponse.size());
-        rightnode = createNode(rightResponse, rightDataFrame, rightLocations, rightWeightsIndices, 0, rightResponse.size());
-      }
-
-      if (leftnode != NULL && rightnode != NULL) {
-        // We have a legitimate split. Add the references to the children of nextNode
-        // and then add these two splits onto the stack.
-        nextNode->left = leftnode;
-        nextNode->right = rightnode;
-
+      if (!leftnode->isTerminalNode) {
         treeCreationStack.push(leftnode);
-        treeCreationStack.push(rightnode);
-        nodesInTree += 2;
       }
-      else {
-        nextNode->isTerminalNode = true;
-        numTerminalNodes++;
+      if (!rightnode->isTerminalNode) {
+        treeCreationStack.push(rightnode);
       }
     }
 
@@ -211,14 +201,40 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
 // Recursive splitting function
 node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix locations, IntegerVector weightsIndices, int level, int numObs) {
 
-  // Stop if we have maxdepth or less than the minimum observations allowed in the tree
-  if (level > maxdepth) {
-    return NULL;
+  // FIND INFORMATION ABOUT THIS NODE
+  // ----------------------------------------------------
+  // Find the average response value in this particular group
+  double averageResponse = 0;
+  for (int i=0; i<response.size(); i++) {
+    averageResponse += response[i];
   }
-  if (numObs < minbucket) {
-    return NULL;
+  averageResponse = averageResponse / response.size();
+  // Find the residual sum of squares for this group
+  double RSS = 0;
+  for (int i=0; i<response.size(); i++) {
+    RSS += pow(response[i] - averageResponse, 2);
+  }
+  // Get the morans I for this group
+  double groupMoranI = 0;
+  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+  groupMoranI = moranI(response, nodeWeights);
+  // SD of Moran's I
+  double groupMoranISD = 0;
+  groupMoranISD = moranIVariance(response, nodeWeights);
+  groupMoranISD = sqrt(groupMoranISD);
+  // Get Geary's C for this group
+  double groupGearyC = gearyC(response, nodeWeights);
+
+  // SHOULD WE ASSIGN THIS NODE AS A TERMINAL NODE AND BE DONE?
+  // -------------------------------------------------------------
+  // If we meet the stopping conditions on this node, then we can stop and call this a terminal node.
+  if (level > maxdepth || numObs < minsplit) {
+    node* newnode = new node{-1, -1, "N/A", numObs, averageResponse, true, false, response, data, locations, weightsIndices, RSS, groupMoranI, groupMoranISD, groupGearyC, NULL, NULL};
+    return newnode;
   }
 
+  // THIS IS NOT A TERMINAL NODE. PROCEED TO FIND THE BEST SPLIT THAT WE CAN HERE.
+  // -----------------------------------------------------------------------------
   // Loop through all the columns, finding the best split
   String bestColumn = 0;
   int bestSplit = 0;
@@ -229,15 +245,6 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   // Construct the weights/distance matrix for this node based off the indices
   NumericMatrix spatialWeightsMatrix = matrixSubsetCells(globalSpatialWeightsMatrix, weightsIndices, weightsIndices);
   NumericMatrix distanceMatrix = matrixSubsetCells(globalDistanceMatrix, weightsIndices, weightsIndices);
-
-  /*
-  int a = spatialWeightsMatrix.nrow();
-  int b = spatialWeightsMatrix.ncol();
-  int c = distanceMatrix.nrow();
-  int d = distanceMatrix.ncol();
-  Rcout << "spatialWeightsMatrix: " << a << " x " << b << std::endl;
-  Rcout << "distanceMatrix: " << c << " x " << d << std::endl;
-  */
 
   CharacterVector dataframeNames = data.names();
   for (int columnIndex=0; columnIndex<data.length(); columnIndex++) {
@@ -287,9 +294,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     }
   }
 
-  // If no better split is ever found, then we can just return NULL.
+  // If no better split is ever found, then we can simply call this a terminal node, just
+  // like we did with the stopping condition.
   if (!betterSplitFound) {
-    return NULL;
+    node* newnode = new node{-1, -1, "N/A", numObs, averageResponse, true, false, response, data, locations, weightsIndices, RSS, groupMoranI, groupMoranISD, groupGearyC, NULL, NULL};
+    return newnode;
   }
 
   // Split according to categorical data or continuous data
@@ -314,29 +323,7 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     factor = -1;
   }
 
-  // Find the average response value in this particular group
-  double averageResponse = 0;
-  for (int i=0; i<response.size(); i++) {
-    averageResponse += response[i];
-  }
-  averageResponse = averageResponse / response.size();
-
-  // Find the residual sum of squares for this group
-  double RSS = 0;
-  for (int i=0; i<response.size(); i++) {
-    RSS += pow(response[i] - averageResponse, 2);
-  }
-
-  // Get the morans I for this group
-  double groupMoranI = 0;
-  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
-  groupMoranI = moranI(response, nodeWeights);
-
-  // Get Geary's C for this group
-  double groupGearyC = gearyC(response, nodeWeights);
-
-  int obsInNode = response.size();
-  node* newnode = new node{splitValue, factor, bestColumn, obsInNode, averageResponse, false, bestSplitIsCategorical, response, data, locations, weightsIndices, RSS, groupMoranI, groupGearyC, NULL, NULL};
+  node* newnode = new node{splitValue, factor, bestColumn, numObs, averageResponse, false, bestSplitIsCategorical, response, data, locations, weightsIndices, RSS, groupMoranI, groupMoranISD, groupGearyC, NULL, NULL};
 
   return newnode;
 }
@@ -384,29 +371,26 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     }
   }
 
-  // Delete this
-  /*
-  Rcout << "response: " << response.size() << std::endl;
-  int a = orderedSpatialWeightsMatrix.nrow();
-  int b = orderedSpatialWeightsMatrix.ncol();
-  int c = orderedDistanceMatrix.nrow();
-  int d = orderedDistanceMatrix.ncol();
-  Rcout << "orderedSpatialWeightsMatrix: " << a << " x " << b << std::endl;
-  Rcout << "orderedDistanceMatrix: " << c << " x " << d << std::endl;
-  */
-
   // Only compute non-zero coefficients
   if ((alpha+beta) < 1) {
     t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
   }
   if (alpha > 0) {
     if (n <= maxobsMtxCalc) {
-      t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+      t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType);
     }
   }
   if (beta > 0) {
     if (n <= maxobsMtxCalc) {
       t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
+
+      //t3 = continuousGoodnessBySize(orderedLocations, getMinBucket());
+      //t3 = continuousGoodnessBySizeOld(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
+      //Rcout << t3 << std::endl;
+      //t3 = continuousGoodnessBySeparation(Rcpp::as<arma::mat>(orderedLocations), n, minbucket);
+      //stop("bruh");
+      //t3 = continuousGoodnessBySeparationOld(orderedLocations, orderedDistanceMatrix, minbucket, islonglat);
+      //t3 = continuousGoodnessBySeparation(as<arma::mat>(orderedLocations), n, minbucket);
     }
   }
 
@@ -447,7 +431,7 @@ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x
   }
   if (alpha > 0) {
     if (n <= maxobsMtxCalc) {
-      t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, spatialBandwidth, spatialWeightsType);
+      t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType);
     }
   }
   if (beta > 0) {
@@ -578,6 +562,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   // Node evaluation (spatial autocorrelation and residual sum of squares)
   NumericVector rss(nodesInTree);
   NumericVector mi(nodesInTree);
+  NumericVector miSD(nodesInTree);
   NumericVector gc(nodesInTree);
   NumericVector expectedMi(nodesInTree);
   NumericVector expectedGc(nodesInTree);
@@ -608,6 +593,7 @@ DataFrame AutoTree::createSplitDataFrame() {
     iscategorical[thisRow] = nextNode->isCategoricalSplit;
     rss[thisRow] = nextNode->RSS;
     mi[thisRow] = nextNode->mi;
+    miSD[thisRow] = nextNode->miSD;
     gc[thisRow] = nextNode->gc;
 
     // Expected value of Moran's I is calculated as -1 / (N-1)
@@ -638,7 +624,7 @@ DataFrame AutoTree::createSplitDataFrame() {
   }
 
   // Construct the final dataframe from the vectors
-  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi, _["expectedMi"] = expectedMi, _["gc"] = gc, _["expectedGc"] = expectedGc);
+  DataFrame splitDataFrame = DataFrame::create( _["column"] = column, _["splitvalue"] = splitvalue, _["category"] = category, _["leftloc"] = leftloc, _["rightloc"] = rightloc, _["numobs"] = numobs, _["isterminal"] = isterminal, _["iscategorical"] = iscategorical, _["prediction"] = prediction, _["rss"] = rss, _["mi"] = mi, _["miSD"] = miSD, _["expectedMi"] = expectedMi, _["gc"] = gc, _["expectedGc"] = expectedGc);
   return splitDataFrame;
 }
 
@@ -750,11 +736,11 @@ int AutoTree::getMaxObsMtxCalc() {
 bool AutoTree::getIsLongLat() {
   return islonglat;
 }
-bool AutoTree::getStandardizeLoss() {
-  return standardizeLoss;
-}
 bool AutoTree::isGearyC() {
   return useGearyC;
+}
+bool AutoTree::getSaddlepointApproximation() {
+  return saddlepointApproximation;
 }
 double AutoTree::getSpatialBandwidth() {
   return spatialBandwidth;

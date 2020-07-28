@@ -4,9 +4,11 @@
  *
  * @author Ethan Ancell
  */
-#include <Rcpp.h>
+#include <RcppArmadillo.h>
+// [[Rcpp::depends(RcppArmadillo)]]
+
 #include <math.h>
-#include "spatialmethods.h"
+#include "SpatialMethods.h"
 
 using namespace Rcpp;
 
@@ -48,6 +50,96 @@ NumericMatrix getInvWeights(NumericMatrix locations, bool islonglat, int power) 
   }
 
   return invDist;
+}
+
+double moranIVariance(NumericVector response, NumericMatrix weights) {
+  // Check that the input is valid
+  if (weights.rows() != weights.cols()) {
+    stop("Weights matrix supplied to moranI function is not a square matrix.");
+  }
+  if (response.size() != weights.cols()) {
+    Rcout << "Response length: " << response.size() << ", weights matrix size: " << weights.nrow() << std::endl;
+    stop("In moranI function, the response vector length is not the same as the matrix.");
+  }
+
+  int nn = response.size();
+  double n = (double) nn;
+
+  // ybar
+  double ybar = 0.0;
+  for (int i=0; i<n; i++) {
+    ybar += response[i];
+  }
+  ybar /= n;
+
+  // Z vector (deviations of response from mean)
+  std::vector<double> z;
+  for (int i=0; i<n; i++) {
+    z.push_back(response[i] - ybar);
+  }
+
+  // S0 (sum of all weights)
+  double s0 = 0.0;
+  for (int i=0; i<nn; i++) {
+    for (int j=0; j<nn; j++) {
+      s0 += weights(i, j);
+    }
+  }
+
+  // S1
+  double s1 = 0.0;
+  for (int i=0; i<nn; i++) {
+    for (int j=0; j<nn; j++) {
+      s1 += pow(weights(i, j) + weights(j, i), 2.0);
+    }
+  }
+  s1 /= 2.0;
+
+  // S2
+  double s2 = 0.0;
+  for (int i=0; i<nn; i++) {
+    double sumColumn1 = 0.0;
+    for (int j=0; j<nn; j++) {
+      sumColumn1 += weights(i, j);
+    }
+
+    double sumColumn2 = 0.0;
+    for (int j=0; j<nn; j++) {
+      sumColumn2 += weights(j, i);
+    }
+
+    s2 += pow(sumColumn1 + sumColumn2, 2.0);
+  }
+
+  // A
+  double a = n * ((pow(n, 2) - 3*n + 3)*s1 - n*s2 + 3*pow(s0, 2.0));
+
+  // D
+  double d_num = 0.0;
+  for (int i=0; i<n; i++) {
+    d_num += pow(z[i], 4.0);
+  }
+  double d_denom = 0.0;
+  for (int i=0; i<n; i++) {
+    d_denom += pow(z[i], 2.0);
+  }
+  d_denom = pow(d_denom, 2.0);
+  double d = d_num / d_denom;
+
+  // B
+  double b = d * ((pow(n, 2.0) - n) * s1 - 2*n*s2 + 6*pow(s0, 2.0));
+
+  // C
+  double c = (n-1.0) * (n - 2.0) * (n - 3.0) * pow(s0, 2.0);
+
+  // E[I^2]
+  double eIsquared = (a - b) / c;
+
+  // E[I]^2
+  double eIQuantSquared = -1 / (n - 1);
+  eIQuantSquared = pow(eIQuantSquared, 2.0);
+
+  return eIsquared - eIQuantSquared;
 }
 
 /* Calculate Moran's I statistic on the data supplied. We assume that a weights
@@ -152,4 +244,91 @@ double gearyC(NumericVector response, NumericMatrix weights) {
   denominator *= (2 * sumWeights);
 
   return numerator / denominator;
+}
+
+// Helper function to compare two NumericVectors. The default "==" operator
+// returns a logical vector that compares the two vectors elementwise, which is different
+// than this function.
+bool compareNumericVector(NumericVector v1, NumericVector v2) {
+  int n = v1.size();
+  if (v2.size() != n) {
+    stop("in \"compareNumericVector\", the two vectors are not of the same size.");
+  }
+
+  for (int i=0; i<n; i++) {
+    if (v1[i] != v2[i]) {
+      return(false);
+    }
+  }
+  return(true);
+}
+
+// Convex hull algorithms
+
+/* Use the "gift wrapping" or "Jarvis march" algorithm to calculate
+ * the convex hull from a cloud of points given in "locations".
+ */
+List jarvisConvexHull(NumericMatrix locations) {
+  // S = locations
+  // P = returnMatrix
+
+  List P;
+
+  int n = locations.nrow();
+
+  // Find a point guaranteed to be in the convex hull (i.e. leftmost location)
+  double leftmostX = locations(0, 0);
+  NumericVector pointOnHull = locations(0, _);
+  for (int i=0; i<n; i++) {
+    if (locations(i, 0) < leftmostX) {
+      leftmostX = locations(i, 0);
+      pointOnHull = locations(i, _);
+    }
+  }
+
+  // i is the iterator through all the locations
+  int i = 0;
+  NumericVector endpoint;
+  do {
+    P.push_back(pointOnHull);
+    endpoint = locations(0, _);
+
+    for (int j=0; j<n; j++) {
+      // Find out if S[j] is on the left of the line from P[i] to endpoint
+      // Ax: pointOnHull[0]
+      // Ay: pointOnHull[1]
+      // Bx: endpoint[0]
+      // By: endpoint[1]
+      // X: Sj[0]
+      // Y: Sj[1]
+      NumericVector Sj = locations(j, _);
+      double result = ((endpoint[0] - pointOnHull[0]) * (Sj[1] - pointOnHull[1]) - (endpoint[1] - pointOnHull[1]) * (Sj[0] - pointOnHull[0]));
+      bool isLeft = result > 0;
+      if ((compareNumericVector(endpoint, pointOnHull)) || isLeft) {
+        endpoint = Sj;
+      }
+    }
+
+    i++;
+    pointOnHull = clone(endpoint);
+  }
+  while (!compareNumericVector(endpoint, P[0]));
+
+  return(P);
+}
+
+/* Given a list that represents the points of a convex hull, calculate the area of the polygon
+ * that it forms.
+ */
+double getAreaOfConvexHull(List convexHull) {
+  double sum = 0.0;
+  int n = convexHull.size();
+  for (int i=0; i<n; i++) {
+    NumericVector one = convexHull[i];
+    NumericVector two = convexHull[(i+1) % n];
+    sum += (one[0]*two[1] - one[1]*two[0]);
+  }
+  sum = fabs(sum/2.0);
+
+  return sum;
 }

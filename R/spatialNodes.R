@@ -8,6 +8,8 @@
 #' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
 #' @param method The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
+#' @param distpowerRange A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by
+#' Moran I to the range mentioned in distpower.
 #' @param modelByResidual If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.
 #' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
@@ -16,7 +18,8 @@
 #' @import mgcv
 #' @import stats
 #' @export
-spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2, modelByResidual = TRUE, decideByGC = FALSE) {
+spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2,
+                         distpowerRange = c(0, 2), modelByResidual = TRUE, decideByGC = FALSE) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
@@ -34,11 +37,43 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   if (nrow(newdata) != nrow(newdataCoords)) {
     stop("The number of rows in newdata and newdataCoords are not the same.")
   }
+  if (!is.numeric(distpowerRange)) {
+    stop("\"distpowerRange\" must be a numeric vector.")
+  }
+  if (length(distpowerRange) != 2) {
+    stop("\"distpowerRange\" must have exactly two elements.")
+  }
+  if (distpowerRange[2] <= distpowerRange[1]) {
+    stop("distpowerRange's second element must be greater than its first element.")
+  }
+  if (!missing(distpowerRange) & !missing(distpower)) {
+    stop("Both distpowerRange and distpower are provided in spatialNodes, this is ambiguous.")
+  }
+
+  # Use whether the autocartModel used long/lat to determine if this should use long/lat
+  # (Great circle distance or euclidean distance?)
+  islonglat <- autocartModel$splitparams$islonglat
+
+  colnames(newdataCoords) <- c("X", "Y")
 
   # Check to make sure that the method type is allowable
-  allowableMethods <- c("idw", "tps")
+  allowableMethods <- c("idw", "tps", "krg")
   if (!(method %in% allowableMethods)) {
     stop("\"method\" parameter is not a valid method.")
+  }
+  if (method != "idw" & !missing(distpower)) {
+    warning("\"distpower\" parameter ignored, as using thin-plate splines instead of inverse distance weighting.")
+  }
+  if (method != "idw" & !missing(distpowerRange)) {
+    warning("\"distpowerRange\" parameter ignored, as not using inverse distance weighting method.")
+  }
+
+  # Thin plate splines on the sphere requires a certain number of degrees of freedom, so
+  # we need to throw an error if the number of minimum observations in each node is not at least as great
+  # as the required degrees of freedom.
+  tpsSphereDf <- 5
+  if ((autocartModel$splitparams$minbucket <= tpsSphereDf) & islonglat & method == "tps") {
+    stop("When using long/lat version of thin-plate splines, \"minbucket\" in the trained model must be greater than the degrees of freedom in the smoothing function, which defaults to 50.")
   }
 
   # If we are missing the decideByGC parameter, then we will use the splitting parameter that was used
@@ -46,10 +81,6 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   if (missing(decideByGC)) {
     decideByGC <- autocartModel$splitparams$useGearyC
   }
-
-  # Use whether the autocartModel used long/lat to determine if this should use long/lat
-  # (Great circle distance or euclidean distance?)
-  islonglat <- autocartModel$splitparams$islonglat
 
   allCoords <- autocartModel$coords
   predFactor <- as.factor(allCoords$pred)
@@ -63,6 +94,23 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   leafGeometryList <- vector("list", numLevels)
   for (level in 1:numLevels) {
     leafGeometryList[[level]] <- allCoords[predFactor == levels(predFactor)[level], ]
+  }
+
+  # Find minimum and maximum of Moran's I in all terminal nodes
+  minimumDp <- distpowerRange[1]
+  maximumDp <- distpowerRange[2]
+  minimumMi <- 1.0
+  maximumMi <- -1.0
+  for (terminalNode in 1:nrow(allTerminalNodes)) {
+    myMi <- allTerminalNodes[terminalNode, "mi"]
+    if (myMi > allTerminalNodes[terminalNode, "expectedMi"]) {
+      if (myMi < minimumMi) {
+        minimumMi <- myMi
+      }
+      if (myMi > maximumMi) {
+        maximumMi <- myMi
+      }
+    }
   }
 
   # Find out which spatial process each new prediction belongs to
@@ -102,6 +150,13 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
           distToAllGeomPoints <- fields::rdist(t(as.matrix(newdataCoords[row, ])), thisGeometryCoordinates)
         }
 
+        # Assign distpower according to what mi is
+        # (assuming that distpowerRange is supplied instead of distpower)
+        if (!missing(distpowerRange)) {
+          myMi <- thisTerminalNode$mi
+          distpower <- ((myMi - minimumMi) / (maximumMi - minimumMi)) * (maximumDp - minimumDp) + minimumDp
+        }
+
         # Standard inverse distance weighting procedures
         invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
         weights <- as.vector(invDistMatrix)
@@ -138,22 +193,21 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
           predictVector <- thisGeometry$actual
         }
 
-        fit <- fields::Tps(thisGeometryCoordinates, predictVector)
-        returnPredictions[row] <- returnPredictions[row] + predict.Krig(fit, t(as.matrix(newdataCoords[row, ])))
+        #fit <- fields::Tps(thisGeometryCoordinates, predictVector)
+        #returnPredictions[row] <- returnPredictions[row] + predict.Krig(fit, t(as.matrix(newdataCoords[row, ])))
 
-        #if (islonglat) {
+        if (islonglat) {
           # For TPS there exists another type for spherical data.
-          #fit <- fields::Tps(thisGeometryCoordinates, residualVector)
-          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-          #myData <- as.data.frame(cbind(thisGeometryCoordinates, resp = residualVector))
-          #fit <- mgcv::gam(resp ~ s(V1, V2, bs = "sos"), data = myData)
-          #fit <- mgcv::gam(resp ~ s(V1, V2), data = myData)
-          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-        #} else {
+          myData <- as.data.frame(cbind(X = thisGeometryCoordinates[, 1],
+                                        Y = thisGeometryCoordinates[, 2], resp = predictVector))
+          fit <- mgcv::gam(resp ~ s(X, Y, bs = "sos", k=autocartModel$splitparams$minbucket-1), data = myData)
+          returnPredictions[row] <- returnPredictions[row] + predict(fit, data.frame(X = newdataCoords[row, 1],
+                                                                                     Y = newdataCoords[row, 2]))
+        } else {
           # Use regular TPS
-          #fit <- fields::Tps(thisGeometryCoordinates, residualVector)
-          #returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
-        #}
+          fit <- fields::Tps(thisGeometryCoordinates, predictVector)
+          returnPredictions[row] <- returnPredictions[row] + predict(fit, t(as.matrix(newdataCoords[row, ])))
+        }
       }
     }
   }

@@ -12,6 +12,9 @@
 #' @return An S3 object of class "autocart".
 #'
 #' @import fields
+#' @import spdep
+#' @import Matrix
+#' @importFrom RcppParallel RcppParallelLibs
 #' @export
 autocart <- function(response, data, locations, alpha, beta, control = NULL) {
     .Call(`_autocart_autocart`, response, data, locations, alpha, beta, control)
