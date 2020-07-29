@@ -53,13 +53,12 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     stop("\"numtrees\" must be of length 1.")
   }
 
-
   numtrees <- as.integer(numtrees)
   n <- length(response)
   nFeatures <- ncol(data)
   mTry <- ceiling(nFeatures / 3)
 
-  allTrees <- list()
+  allTrees <- vector("list", length = numtrees)
 
   for (treeIndex in 1:numtrees) {
 
@@ -77,8 +76,16 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     # Select only the data that is needed
     thisData <- thisData[ , nodeFeatures]
 
-    tree <- autocart(thisResponse, thisData, thisLocations, alpha, beta, control)
+    #browser()
 
+    af_treenum <<- treeIndex
+    af_response <<- thisResponse
+    af_data <<- thisData
+    af_locations <<- thisLocations
+    af_control <<- control
+
+    print(paste("Creating tree", treeIndex))
+    tree <- autocart(thisResponse, thisData, thisLocations, alpha, beta, control)
     allTrees[[treeIndex]] <- tree
   }
 
@@ -146,10 +153,17 @@ predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, us
   if (!useSpatialNodes) {
     predictionList <- lapply(autoforestModel, predictAutocart, newdata)
   } else {
-    predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
-                             newdataCoords = newdataCoords, method = method,
-                             distpower = distpower, distpowerRange = distpowerRange,
-                             modelByResidual = modelByResidual, decideByGC = decideByGC)
+    if (!missing(distpowerRange)) {
+      predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
+                               newdataCoords = newdataCoords, method = method,
+                               distpowerRange = distpowerRange,
+                               modelByResidual = modelByResidual, decideByGC = decideByGC)
+    } else {
+      predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
+                               newdataCoords = newdataCoords, method = method,
+                               distpower = distpower,
+                               modelByResidual = modelByResidual, decideByGC = decideByGC)
+    }
   }
 
 

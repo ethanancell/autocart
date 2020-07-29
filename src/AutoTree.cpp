@@ -139,6 +139,9 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       node* nextNode = treeCreationStack.top();
       treeCreationStack.pop();
 
+      // DEBUG 729
+      // printNode(nextNode);
+
       // Error check
       if (nextNode->isTerminalNode) {
         stop("Error: trying to make a split on a node that has already been classified as a terminal node.");
@@ -169,6 +172,10 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       rightLocations = subset(nodeLocations, !isLeft);
       leftWeightsIndices = weightsIndices[isLeft];
       rightWeightsIndices = weightsIndices[!isLeft];
+
+      // DEBUG 729
+      // Rcout << "leftResponse size: " << leftResponse.size() << std::endl;
+      // Rcout << "rightResponse size: " << rightResponse.size() << std::endl;
 
       // I have partitioned my data above. In any case, I want to create the nodes for
       // both children. If a node happens to have numObs > minsplit, then I can push that
@@ -217,7 +224,8 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   // Get the morans I for this group
   double groupMoranI = 0;
   NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
-  groupMoranI = moranI(response, nodeWeights);
+  //groupMoranI = moranI(response, nodeWeights);
+  groupMoranI = moranIParallel(response, nodeWeights);
   // SD of Moran's I
   double groupMoranISD = 0;
   groupMoranISD = moranIVariance(response, nodeWeights);
@@ -275,6 +283,10 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
       }
     }
 
+    // DEBUG 729
+    // Rcout << "column: " << columnIndex << std::endl;
+    // Rcout << "Goodness: " << goodnessVector << std::endl;
+
     double tempGoodness = findMax(goodnessVector);
     if (tempGoodness > maxGoodness) {
       // We found a better split than the one we have currently
@@ -293,6 +305,8 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
       }
     }
   }
+
+  // Rcout << "maxGoodness: " << maxGoodness << std::endl;
 
   // If no better split is ever found, then we can simply call this a terminal node, just
   // like we did with the stopping condition.
@@ -315,9 +329,12 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   else {
     Function f("order");
     NumericVector x = data[bestColumn];
+    // DEBUG 729
+    // Rcout << "X (unordered): " << x << std::endl;
     NumericVector order_x = f(x);
     order_x = order_x - 1;
     x = x[order_x];
+    // Rcout << "X (ordered): " << x << std::endl;
     splitValue = x[bestSplit];
     // Set to dummy value. Shouldn't ever be used, but node struct can't be modified
     factor = -1;
@@ -363,6 +380,9 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     orderedLocations(slotLocation, _) = locations(i, _);
   }
 
+  // DEBUG 729
+  // Rcout << "(SPLIT) orderedX: " << x << std::endl;
+
   // Order the weights/distance matrices in the same order as x_order
   for (int i=0; i<n; i++) {
     for (int j=0; j<n; j++) {
@@ -394,14 +414,30 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     }
   }
 
-  // If standardization parameter is set, then for each of {t1, t2, t3}
-  // we'll stretch out the values to fit exactly between
-
   // Return the linear combination of the goodness values
   t1 = (1-alpha-beta) * t1;
   t2 = alpha * t2;
   t3 = beta * t3;
-  return t1 + t2 + t3;
+
+  NumericVector goodness = t1 + t2 + t3;
+
+  // BUG FIX FROM 7/29/2020
+  // Sometimes when you have an ordered x_vector {x, x, x, x, 6, 6, 6, 6, 6, 6} goodness would be {g, g, g, g, g, g, g, g, g}
+  // g = {g, g, g, g, g, 0, 0, 0, 0}
+  // with minbucket=5, 6 gets chosen as best split which creates a "right" child
+  // vector of length 0. If we perform a quick check such that if ordered x @ location of "n-minbucket-1" is
+  // the same as x[n-1] then set goodness values starting at g[n-minbucket] until to when x stops being the same as x[n-1]
+  // which stops those splits from being chosen.
+  if (x[n-minbucket-1] == x[n-1]) {
+    double endingX = x[n-1];
+    int i = n-minbucket-1;
+    while (x[i] == endingX && i >= 0) {
+      goodness[i] = 0.0;
+      i--;
+    }
+  }
+
+  return goodness;
 }
 
 /* Given an x_vector (predictor), return a vector of length length(levels(x_vector)) (the number of factors)
@@ -672,6 +708,12 @@ void AutoTree::printNode(node* x) {
   std::string columnName = x->column;
   Rcout << "Column: " << columnName << std::endl;
   Rcout << "Obs in Node: " << x->obsInNode << std::endl;
+  // NumericVector dd = x->response;
+  // Rcout << "Response: " << dd << std::endl;
+  // NumericMatrix l = x->locations;
+  // Rcout << "Locations: " << l << std::endl;
+  Rcout << "RSS: " << (double) x->RSS << std::endl;
+  Rcout << "mi: " << (double) x->mi << std::endl;
 }
 
 /* Helper functions */

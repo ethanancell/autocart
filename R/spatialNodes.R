@@ -103,12 +103,14 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   maximumMi <- -1.0
   for (terminalNode in 1:nrow(allTerminalNodes)) {
     myMi <- allTerminalNodes[terminalNode, "mi"]
-    if (myMi > allTerminalNodes[terminalNode, "expectedMi"]) {
-      if (myMi < minimumMi) {
-        minimumMi <- myMi
-      }
-      if (myMi > maximumMi) {
-        maximumMi <- myMi
+    if (!is.nan(myMi)) {
+      if (myMi > allTerminalNodes[terminalNode, "expectedMi"]) {
+        if (myMi < minimumMi) {
+          minimumMi <- myMi
+        }
+        if (myMi > maximumMi) {
+          maximumMi <- myMi
+        }
       }
     }
   }
@@ -137,7 +139,11 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
     if (decideByGC) {
       spatialProcessExists <- thisTerminalNode$gc < thisTerminalNode$expectedGc
     } else {
-      spatialProcessExists <- thisTerminalNode$mi > thisTerminalNode$expectedMi
+      if (is.nan(thisTerminalNode$mi)) {
+        spatialProcessExists <- FALSE
+      } else {
+        spatialProcessExists <- thisTerminalNode$mi > thisTerminalNode$expectedMi
+      }
     }
 
     if (spatialProcessExists) {

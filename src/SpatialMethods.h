@@ -17,4 +17,7 @@ bool compareNumericVector(NumericVector v1, NumericVector v2);
 List jarvisConvexHull(NumericMatrix locations);
 double getAreaOfConvexHull(List convexHull);
 
+// Parallelized algorithms
+double moranIParallel(NumericVector response, NumericMatrix weights);
+
 #endif

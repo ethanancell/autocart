@@ -11,6 +11,14 @@ test_that("Autocart returns sensical output", {
   alpha <- 0.80
   beta <- 0.10
 
+  # Test: delete this
+  snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
+  response <- as.matrix(snow$yr50)
+  snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
+                     snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
+  locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
+  weights <- getInvWeights(locations, FALSE, 2);
+
   # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
   # response so that the test ensures that factors can be used.
   factor_column <- rep(NA, nrow(snow))

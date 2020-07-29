@@ -5,12 +5,15 @@
  * @author Ethan Ancell
  */
 #include <RcppArmadillo.h>
+#include <RcppParallel.h>
 // [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::depends(RcppParallel)]]
 
 #include <math.h>
 #include "SpatialMethods.h"
 
 using namespace Rcpp;
+using namespace RcppParallel;
 
 /* Simple euclidean distance implementation. */
 double euclidDistance(double x1, double y1, double x2, double y2) {
@@ -24,6 +27,7 @@ double euclidDistance(double x1, double y1, double x2, double y2) {
  * assume that the locations matrix contains points that have already been
  * projected.
  */
+// [[Rcpp::export]]
 NumericMatrix getInvWeights(NumericMatrix locations, bool islonglat, int power) {
   // First get a matrix with the distances from all points to all other points
   int matrixSize = locations.rows();
@@ -150,6 +154,7 @@ double moranIVariance(NumericVector response, NumericMatrix weights) {
  * weight between an observation and itself. (i.e. assume that the diagonal
  * of the weights matrix is filled with entries of zero)
  */
+// [[Rcpp::export]]
 double moranI(NumericVector response, NumericMatrix weights) {
   // Check that the input is valid
   if (weights.rows() != weights.cols()) {
@@ -331,4 +336,134 @@ double getAreaOfConvexHull(List convexHull) {
   sum = fabs(sum/2.0);
 
   return sum;
+}
+
+
+// =====================================
+// ===== PARALLELIZED CALCULATIONS =====
+// =====================================
+
+// Worker function to add up all weights in a weights matrix
+struct PSumWeights : public Worker
+{
+  // source matrix
+  const RMatrix<double> weights;
+
+  // destination
+  double sumWeights;
+
+  // constructors
+  PSumWeights(const NumericMatrix weights) : weights(weights), sumWeights(0) {}
+  PSumWeights(const PSumWeights& pSumWeights, Split) : weights(pSumWeights.weights), sumWeights(0) {}
+  
+  void operator()(std::size_t begin, std::size_t end) {
+    sumWeights += std::accumulate(weights.begin() + begin, weights.begin() + end, 0.0);
+  }
+
+  // Join value with other sum
+  void join(const PSumWeights& rhs) {
+    sumWeights += rhs.sumWeights;
+  }
+};
+
+// Worker function to add up response
+struct PSumVector : public Worker
+{
+  const RVector<double> input;
+  double value;
+  PSumVector(const NumericVector input) : input(input), value(0) {}
+  PSumVector(const PSumVector& sum, Split) : input(sum.input), value(0) {}
+
+  void operator()(std::size_t begin, std::size_t end) {
+    value += std::accumulate(input.begin() + begin, input.begin() + end, 0.0);
+  }
+  void join(const PSumVector& rhs) {
+    value += rhs.value;
+  }
+};
+
+// Worker function to get numerator of Moran I
+struct NumMI : public Worker
+{
+  // input
+  const RVector<double> y;
+  const double yBar;
+  const RMatrix<double> w;
+  const std::size_t n;
+  
+  // output
+  double num;
+
+  NumMI(const NumericVector y, const double yBar, const NumericMatrix w, const std::size_t n)
+   : y(y), yBar(yBar), w(w), n(n), num(0) {}
+  NumMI(const NumMI& sum, Split)
+   : y(sum.y), yBar(sum.yBar), w(sum.w), n(sum.n), num(0) {}
+
+  void operator()(std::size_t begin, std::size_t end) {
+    // Work for the rows from [begin, end]
+    for (std::size_t i = begin; i<end; i++) {
+      double iOffset = y[i] - yBar;
+      for (std::size_t j = 0; j<n; j++) {
+        double jOffset = y[j] - yBar;
+        num += w(i, j) * iOffset * jOffset;
+      }
+    }
+  }
+
+  void join(const NumMI& rhs) {
+    num += rhs.num;
+  }
+};
+
+// Worker function to get denominator of Moran I
+struct DenMI : public Worker
+{
+  // input
+  const RVector<double> y;
+  const double yBar;
+
+  // output
+  double den;
+
+  DenMI(const NumericVector y, const double yBar) : y(y), yBar(yBar), den(0) {}
+  DenMI(const DenMI& sum, Split) : y(sum.y), yBar(sum.yBar), den(0) {}
+
+  void operator()(std::size_t begin, std::size_t end) {
+    for (std::size_t i = begin; i < end; i++) {
+      double offset = y[i] - yBar;
+      den += offset * offset;
+    }
+  }
+
+  void join(const DenMI& rhs) {
+    den += rhs.den;
+  }
+};
+
+double moranIParallel(NumericVector response, NumericMatrix weights) {
+  
+  int n = response.size();
+  double nn = (double) n;
+  
+  // Get the sum of weights
+  PSumWeights pSumWeights(weights);
+  parallelReduce(0, weights.length(), pSumWeights);
+  double sumWeights = pSumWeights.sumWeights;
+
+  // Get the average response
+  PSumVector pSumVector(response);
+  parallelReduce(0, n, pSumVector);
+  double avgResponse = pSumVector.value / nn;
+
+  // Get numerator
+  NumMI numMI(response, avgResponse, weights, n);
+  parallelReduce(0, n, numMI);
+  double num = numMI.num;
+
+  // Get denominator
+  DenMI denMI(response, avgResponse);
+  parallelReduce(0, n, denMI);
+  double den = denMI.den;
+
+  return (nn / sumWeights) * (num / den);
 }

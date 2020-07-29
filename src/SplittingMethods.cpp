@@ -200,7 +200,7 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
       }
       // MORAN I
       else {
-        double mi = moranI(y1, weightsE1);
+        double mi = moranIParallel(y1, weightsE1);
 
         /*
          // Optional saddlepoint approximation to Moran I
@@ -234,7 +234,7 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
       }
       // MORAN I
       else {
-        double mi = moranI(y2, weightsE2);
+        double mi = moranIParallel(y2, weightsE2);
 
         /*
          // Optional saddlepoint approximation to Moran I
@@ -430,7 +430,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
         }
         // MORAN I
         else {
-          double mi = moranI(y1, weightsE1);
+          double mi = moranIParallel(y1, weightsE1);
           // Scale to [0, 1]
           mi = (mi + 1.0) / 2.0;
           goodness[factorLevel] = mi * (wtSum[factorLevel]);
@@ -450,7 +450,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
         }
         // MORAN I
         else {
-          double mi = moranI(y2, weightsE2);
+          double mi = moranIParallel(y2, weightsE2);
           // Scale to [0, 1]
           mi = (mi + 1.0) / 2.0;
           goodness[factorLevel] += (mi * (n - wtSum[factorLevel]));
