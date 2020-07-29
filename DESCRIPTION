@@ -12,7 +12,7 @@ Encoding: UTF-8
 LazyData: true
 Depends:
     fields,
-    mgcv,
+    mgcv
 Imports:
     Rcpp,
     RcppArmadillo,
