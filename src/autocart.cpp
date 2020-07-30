@@ -37,6 +37,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   bool retainCoords = true;
   bool useGearyC = false;
   bool saddlepointApproximation = false;
+  bool useParallelCalculations = true;
 
   SpatialWeights::Type spatialWeightsType = SpatialWeights::Regular;
   std::string spatialWeightsExtract = "default";
@@ -63,6 +64,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     retainCoords = as<bool>(autocartControl["retainCoords"]);
     useGearyC = as<bool>(autocartControl["useGearyC"]);
     saddlepointApproximation = as<bool>(autocartControl["saddlepointApproximation"]);
+    useParallelCalculations = as<bool>(autocartControl["runParallel"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -137,7 +139,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
       if (debugOutput) {
         Rcout << "No custom supplied weights matrix!" << std::endl;
       }
-      spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+      spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType, useParallelCalculations);
     }
     else {
       if (debugOutput) {
@@ -166,7 +168,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     }
 
     // Spatial weights matrix
-    spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+    spatialWeightsMatrix = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType, useParallelCalculations);
   }
 
   // ERROR CHECK
@@ -195,7 +197,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, useGearyC, saddlepointApproximation, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, useGearyC, saddlepointApproximation, useParallelCalculations, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
   tree.createTree(response, data, locations);
 
   // List members

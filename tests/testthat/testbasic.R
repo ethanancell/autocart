@@ -45,7 +45,6 @@ test_that("Autocart returns sensical output", {
   # Set a spatial bandwidth
   myControl <- autocartControl(distpower = 2,
                                spatialWeightsType = "gaussian",
-                               #saddlepointApproximation = TRUE,
                                spatialBandwidthProportion = 0.8)
 
   model <- autocart(response, snow, locations, alpha, beta, myControl)

@@ -84,7 +84,6 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     af_locations <<- thisLocations
     af_control <<- control
 
-    print(paste("Creating tree", treeIndex))
     tree <- autocart(thisResponse, thisData, thisLocations, alpha, beta, control)
     allTrees[[treeIndex]] <- tree
   }

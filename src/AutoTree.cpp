@@ -31,7 +31,7 @@
 using namespace Rcpp;
 
 // Set all the parameters for the tree creation
-AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool useGearyC_, bool saddlepointApproximation_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool useGearyC_, bool saddlepointApproximation_, bool useParallelCalculations_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
   root = NULL;
 
   // Error check the parameters
@@ -59,6 +59,7 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   spatialBandwidth = spatialBandwidth_;
   globalDistanceMatrix = globalDistanceMatrix_;
   globalSpatialWeightsMatrix = globalSpatialWeightsMatrix_;
+  useParallelCalculations = useParallelCalculations_;
 }
 
 // Kick off the splitting
@@ -173,10 +174,6 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       leftWeightsIndices = weightsIndices[isLeft];
       rightWeightsIndices = weightsIndices[!isLeft];
 
-      // DEBUG 729
-      // Rcout << "leftResponse size: " << leftResponse.size() << std::endl;
-      // Rcout << "rightResponse size: " << rightResponse.size() << std::endl;
-
       // I have partitioned my data above. In any case, I want to create the nodes for
       // both children. If a node happens to have numObs > minsplit, then I can push that
       // node onto the stack in order to keep splitting it down. I will know that a node has
@@ -223,9 +220,14 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   }
   // Get the morans I for this group
   double groupMoranI = 0;
-  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+  NumericMatrix nodeWeights = getWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, spatialWeightsType, getUseParallelCalculations());
   //groupMoranI = moranI(response, nodeWeights);
-  groupMoranI = moranIParallel(response, nodeWeights);
+  if (getUseParallelCalculations()) {
+    groupMoranI = moranIParallel(response, nodeWeights);
+  }
+  else {
+    groupMoranI = moranI(response, nodeWeights);
+  }
   // SD of Moran's I
   double groupMoranISD = 0;
   groupMoranISD = moranIVariance(response, nodeWeights);
@@ -393,16 +395,16 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
 
   // Only compute non-zero coefficients
   if ((alpha+beta) < 1) {
-    t1 = continuousGoodnessByVariance(y, x, wt, minbucket);
+    t1 = continuousGoodnessByVariance(y, x, wt, minbucket, getUseParallelCalculations());
   }
   if (alpha > 0) {
     if (n <= maxobsMtxCalc) {
-      t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType);
+      t2 = continuousGoodnessByAutocorrelation(y, x, orderedLocations, orderedSpatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType, getUseParallelCalculations());
     }
   }
   if (beta > 0) {
     if (n <= maxobsMtxCalc) {
-      t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
+      t3 = continuousGoodnessBySize(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat, getUseParallelCalculations());
 
       //t3 = continuousGoodnessBySize(orderedLocations, getMinBucket());
       //t3 = continuousGoodnessBySizeOld(x, orderedLocations, orderedDistanceMatrix, wt, minbucket, islonglat);
@@ -463,16 +465,16 @@ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x
   NumericVector t3(numLevels, 0.0);
 
   if ((alpha+beta) < 1) {
-    t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket);
+    t1 = categoricalGoodnessByVariance(response, x_vector, wt, minbucket, getUseParallelCalculations());
   }
   if (alpha > 0) {
     if (n <= maxobsMtxCalc) {
-      t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType);
+      t2 = categoricalGoodnessByAutocorrelation(response, x_vector, locations, spatialWeightsMatrix, wt, minbucket, distpower, islonglat, useGearyC, saddlepointApproximation, spatialBandwidth, spatialWeightsType, getUseParallelCalculations());
     }
   }
   if (beta > 0) {
     if (n <= maxobsMtxCalc) {
-      t3 = categoricalGoodnessBySize(x_vector, locations, distanceMatrix, wt, minbucket, islonglat);
+      t3 = categoricalGoodnessBySize(x_vector, locations, distanceMatrix, wt, minbucket, islonglat, getUseParallelCalculations());
     }
   }
 
@@ -783,6 +785,9 @@ bool AutoTree::isGearyC() {
 }
 bool AutoTree::getSaddlepointApproximation() {
   return saddlepointApproximation;
+}
+bool AutoTree::getUseParallelCalculations() {
+  return useParallelCalculations;
 }
 double AutoTree::getSpatialBandwidth() {
   return spatialBandwidth;

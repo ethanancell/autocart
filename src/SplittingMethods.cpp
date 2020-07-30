@@ -30,18 +30,18 @@ using namespace arma;
  * @param spatialBandwidth the maximum distance that we consider there to be any spatial influence
  * @param spatialWeightsType the type of weights matrix calculation that we perform.
  */
-NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth, SpatialWeights::Type spatialWeightsType, bool useParallelCalculations) {
   NumericMatrix myWeights;
 
   switch (spatialWeightsType) {
   case SpatialWeights::Regular:
   {
-    myWeights = getDefaultWeightsMatrix(locations, distpower, islonglat, spatialBandwidth);
+    myWeights = getDefaultWeightsMatrix(locations, distpower, islonglat, spatialBandwidth, useParallelCalculations);
     break;
   }
   case SpatialWeights::Gaussian:
   {
-    myWeights = getGaussianWeightsMatrix(locations, islonglat, spatialBandwidth);
+    myWeights = getGaussianWeightsMatrix(locations, islonglat, spatialBandwidth, useParallelCalculations);
     break;
   }
   default:
@@ -65,7 +65,7 @@ NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islo
  * @param spatialBandwidth Past this distance, we assume zero spatial influence and set it to 0
  * @return A spatial weights matrix that uses inverse distance.
  */
-NumericMatrix getDefaultWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth) {
+NumericMatrix getDefaultWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth, bool useParallelCalculations) {
   int n = locations.nrow();
   NumericMatrix weights;
   if (islonglat) {
@@ -103,7 +103,7 @@ NumericMatrix getDefaultWeightsMatrix(NumericMatrix locations, int distpower, bo
  * @param spatialBandwidth A double with the maximum distance where a spatial effect is said to occur
  * @return A spatial weights matrix that uses Gaussian weighting and a bandwidth.
  */
-NumericMatrix getGaussianWeightsMatrix(NumericMatrix locations, bool islonglat, double spatialBandwidth) {
+NumericMatrix getGaussianWeightsMatrix(NumericMatrix locations, bool islonglat, double spatialBandwidth, bool useParallelCalculations) {
   int n = locations.nrow();
   NumericMatrix weights;
   if (islonglat) {
@@ -137,7 +137,7 @@ NumericMatrix getGaussianWeightsMatrix(NumericMatrix locations, bool islonglat, 
 /* Use the reduction in variance to evaluate goodness for a continuous split.
  * Returns a vector ordered by x that evaluates the split from 1:i vs i+1:n
  */
-NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector x_vector, NumericVector wt, int minbucket) {
+NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector x_vector, NumericVector wt, int minbucket, bool useParallelCalculations) {
   // Make copies as to not modify the original vectors
   NumericVector y = clone(response);
   NumericVector x = clone(x_vector);
@@ -169,7 +169,7 @@ NumericVector continuousGoodnessByVariance(NumericVector response, NumericVector
 }
 
 // Calculate Moran's I statistic for each of the two halves
-NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, bool saddlepointApproximation, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+NumericVector continuousGoodnessByAutocorrelation(NumericVector response, NumericVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, bool saddlepointApproximation, double spatialBandwidth, SpatialWeights::Type spatialWeightsType, bool useParallelCalculations) {
 
   // Order the locations matrix rows in the same order as x.
   int n = response.size();
@@ -200,7 +200,13 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
       }
       // MORAN I
       else {
-        double mi = moranIParallel(y1, weightsE1);
+        double mi;
+        if (useParallelCalculations) {
+          mi = moranIParallel(y1, weightsE1);
+        }
+        else {
+          mi = moranI(y1, weightsE1);
+        }
 
         /*
          // Optional saddlepoint approximation to Moran I
@@ -234,7 +240,13 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
       }
       // MORAN I
       else {
-        double mi = moranIParallel(y2, weightsE2);
+        double mi;
+        if (useParallelCalculations) {
+          mi = moranIParallel(y2, weightsE2);
+        }
+        else {
+          mi = moranI(y2, weightsE2);
+        }
 
         /*
          // Optional saddlepoint approximation to Moran I
@@ -261,7 +273,7 @@ NumericVector continuousGoodnessByAutocorrelation(NumericVector response, Numeri
 
 
 // Use the size of the regions to encourage grouped up observations
-NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat) {
+NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat, bool useParallelCalculations) {
 
   int n = x_vector.size();
   NumericVector goodness(x_vector.size()-1, 0.0);
@@ -308,7 +320,7 @@ NumericVector continuousGoodnessBySize(NumericVector x_vector, NumericMatrix loc
 // ========================================
 
 // Reduction in variance
-NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVector x_vector, NumericVector wt, int minbucket) {
+NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVector x_vector, NumericVector wt, int minbucket, bool useParallelCalculations) {
 
   NumericVector y = clone(response);
   IntegerVector x = clone(x_vector);
@@ -357,7 +369,7 @@ NumericVector categoricalGoodnessByVariance(NumericVector response, IntegerVecto
 }
 
 // Spatial autocorrelation splitting
-NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, bool saddlepointApproximation, double spatialBandwidth, SpatialWeights::Type spatialWeightsType) {
+NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, IntegerVector x_vector, NumericMatrix locations, NumericMatrix spatialWeightsMatrix, NumericVector wt, int minbucket, int distpower, bool islonglat, bool useGearyC, bool saddlepointApproximation, double spatialBandwidth, SpatialWeights::Type spatialWeightsType, bool useParallelCalculations) {
 
   // Useful information that will be used by splitting
   CharacterVector lvls = x_vector.attr("levels");
@@ -419,7 +431,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
       // E1
       // Skip if only one observation with this factor
       if (wtSum[factorLevel] > 1.0) {
-        NumericMatrix weightsE1 = getWeightsMatrix(e1, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+        NumericMatrix weightsE1 = getWeightsMatrix(e1, distpower, islonglat, spatialBandwidth, spatialWeightsType, useParallelCalculations);
 
         // GEARY C
         if (useGearyC) {
@@ -430,7 +442,13 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
         }
         // MORAN I
         else {
-          double mi = moranIParallel(y1, weightsE1);
+          double mi;
+          if (useParallelCalculations) {
+            mi = moranIParallel(y1, weightsE1);
+          }
+          else {
+            mi = moranI(y1, weightsE1);
+          }
           // Scale to [0, 1]
           mi = (mi + 1.0) / 2.0;
           goodness[factorLevel] = mi * (wtSum[factorLevel]);
@@ -439,7 +457,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
 
       // E2
       if ((n - wtSum[factorLevel]) > 1.0) {
-        NumericMatrix weightsE2 = getWeightsMatrix(e2, distpower, islonglat, spatialBandwidth, spatialWeightsType);
+        NumericMatrix weightsE2 = getWeightsMatrix(e2, distpower, islonglat, spatialBandwidth, spatialWeightsType, useParallelCalculations);
 
         // GEARY C
         if (useGearyC) {
@@ -450,7 +468,13 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
         }
         // MORAN I
         else {
-          double mi = moranIParallel(y2, weightsE2);
+          double mi;
+          if (useParallelCalculations) {
+            mi = moranIParallel(y2, weightsE2);
+          }
+          else {
+            mi = moranI(y2, weightsE2);
+          }
           // Scale to [0, 1]
           mi = (mi + 1.0) / 2.0;
           goodness[factorLevel] += (mi * (n - wtSum[factorLevel]));
@@ -465,7 +489,7 @@ NumericVector categoricalGoodnessByAutocorrelation(NumericVector response, Integ
 }
 
 // Splitting by the shape of the regions
-NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat) {
+NumericVector categoricalGoodnessBySize(IntegerVector x_vector, NumericMatrix locations, NumericMatrix distanceMatrix, NumericVector wt, int minbucket, bool islonglat, bool useParallelCalculations) {
   // Find size
   CharacterVector lvls = x_vector.attr("levels");
   int numLevels = lvls.size();

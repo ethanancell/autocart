@@ -20,7 +20,7 @@
 autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
                             maxobsMtxCalc = NULL, distpower = 1, islonglat = TRUE,
                             givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE,
-                            saddlepointApproximation = FALSE,
+                            saddlepointApproximation = FALSE, runParallel = TRUE,
                             spatialWeightsType = "default", customSpatialWeights = NULL,
                             spatialBandwidthProportion = 1, spatialBandwidth = NULL) {
 
@@ -48,6 +48,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   }
   if (!is.logical(saddlepointApproximation)) {
     stop("\"saddlepointApproximation\" must be logical.")
+  }
+  if (!is.logical(runParallel)) {
+    stop("\"runParallel\" must be logical.")
   }
   if (!is.character(spatialWeightsType)) {
     stop("\"spatialWeightsType\" must be a valid character type.")
@@ -141,6 +144,7 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     retainCoords = retainCoords,
     useGearyC = useGearyC,
     saddlepointApproximation = saddlepointApproximation,
+    runParallel = runParallel,
     spatialWeightsType = spatialWeightsType,
     customSpatialWeights = customSpatialWeights,
     spatialBandwidthProportion = spatialBandwidthProportion,
