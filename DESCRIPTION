@@ -1,0 +1,32 @@
+Package: autocart
+Type: Package
+Title: Autocorrelation Regression Trees
+Version: 1.3.0
+Authors@R: person("Ethan", "Ancell", email = "ethanancell@gmail.com", role = c("aut", "cre"))
+Maintainer: Ethan Ancell <ethanancell@gmail.com>
+Description: A modified version of the classification and regression tree (CART) 
+    algorithm for modelling spatial data that features coordinate information.
+    Coordinate information can be used to evaluate measures of spatial
+    autocorrelation and spatial compactness during the splitting phase of the
+    tree, leading to better predictions are more physically realistic predictions
+    on these types of datasets.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends:
+    fields,
+    mgcv
+Imports:
+    Rcpp,
+    RcppParallel
+LinkingTo: 
+    Rcpp,
+    RcppArmadillo,
+    RcppParallel
+Suggests:
+    testthat,
+    knitr,
+    rmarkdown
+RoxygenNote: 7.1.1
+VignetteBuilder: knitr
+SystemRequirements: GNU make
