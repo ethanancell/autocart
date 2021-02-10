@@ -37,7 +37,8 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
                             runParallel = TRUE, spatialWeightsType = "default",
                             customSpatialWeights = NULL,
                             spatialBandwidthProportion = 1,
-                            spatialBandwidth = NULL) {
+                            spatialBandwidth = NULL,
+                            asForest = FALSE) {
 
   # Check the TYPES on the user input
   if (!is.numeric(minsplit)) {
