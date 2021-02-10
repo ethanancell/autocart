@@ -14,6 +14,8 @@
 #' @param customSpatialWeights Use this parameter to pass in an optional spatial weights matrix for use in autocorrelation calculations. Must have nrow and ncol equal to rows in training dataframe.
 #' @param spatialBandwidthProportion What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}
 #' @param spatialBandwidth What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.
+#' @param asForest A logical indicating if the tree should be created as a forest component with random subsetting of predictors at each node. Set this to true if you are using this tree inside an ensemble.
+#' @param asForestMtry An integer indicating the number of predictor variables to subset at each node of the tree.
 #' @return An object passed in to the \code{autocart} function that controls the splitting.
 #'
 #' @examples
@@ -38,7 +40,8 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
                             customSpatialWeights = NULL,
                             spatialBandwidthProportion = 1,
                             spatialBandwidth = NULL,
-                            asForest = FALSE) {
+                            asForest = FALSE,
+                            asForestMTry = 1) {
 
   # Check the TYPES on the user input
   if (!is.numeric(minsplit)) {
@@ -65,6 +68,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   if (!is.logical(runParallel)) {
     stop("\"runParallel\" must be logical.")
   }
+  if (!is.logical(asForest)) {
+    stop("\"asForest\" must be a logical value.")
+  }
   if (!is.character(spatialWeightsType)) {
     stop("\"spatialWeightsType\" must be a valid character type.")
   }
@@ -79,6 +85,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   }
   if (!is.null(maxobsMtxCalc) & !is.numeric(maxobsMtxCalc)) {
     stop("\"maxobsMtxCalc\" argument must be a numeric number.")
+  }
+  if (!is.numeric(asForestMTry)) {
+    stop("\"asForestMTry is not numeric.")
   }
 
   # This is the allowable set of weighting types
@@ -144,6 +153,8 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
   spatialWeightsType = as.character(spatialWeightsType)
   spatialBandwidth = as.numeric(spatialBandwidth)
   spatialBandwidthProportion = as.numeric(spatialBandwidthProportion)
+  asForest = as.logical(asForest)
+  asForestMTry = as.integer(asForestMTry)
 
   control <- list(
     minsplit = minsplit,
@@ -160,7 +171,9 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
     spatialWeightsType = spatialWeightsType,
     customSpatialWeights = customSpatialWeights,
     spatialBandwidthProportion = spatialBandwidthProportion,
-    spatialBandwidth = spatialBandwidth
+    spatialBandwidth = spatialBandwidth,
+    asForest = asForest,
+    asForestMTry = asForestMTry
   )
 
   # Set the name for the control object
