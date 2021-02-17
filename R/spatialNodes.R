@@ -8,11 +8,25 @@
 #' @param newdataCoords a matrix of coordinates for all the predictors contained in \code{newdata}
 #' @param method The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
-#' @param distpowerRange A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by
-#' Moran I to the range mentioned in distpower.
+#' @param distpowerRange A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by Moran I to the range mentioned in distpower.
 #' @param modelByResidual If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.
 #' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
+#'
+#' @examples
+#' # Load some data for a spatial nodes example
+#' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+#' y <- snow$yr50
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+#'
+#' # Create an autocart model with 50 trees
+#' snow_model <- autocart(y, X, locations, 0.30, 0)
+#'
+#' # Predit with the spatial node effect
+#' new_X <- X[1:10, ]
+#' new_loc <- locations[1:10, ]
+#' spatial_node_predictions <- spatialNodes(snow_model, new_X, new_loc, distpowerRange = c(0, 2))
 #'
 #' @import fields
 #' @import mgcv

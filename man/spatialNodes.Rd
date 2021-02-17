@@ -29,8 +29,7 @@ spatialNodes(
 
 \item{distpower}{the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.}
 
-\item{distpowerRange}{A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by
-Moran I to the range mentioned in distpower.}
+\item{distpowerRange}{A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by Moran I to the range mentioned in distpower.}
 
 \item{modelByResidual}{If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.}
 
@@ -44,4 +43,20 @@ Using an autocart model, use the terminal nodes to form a spatial process that u
 distance weighting to interpolate. The prediction for the new data that is passed in is formed
 by making a prediction to assign it to a group. Next, the residual for the new prediction is
 formed by inverse distance weighting the residual for the other points that are a part of that geometry.
+}
+\examples{
+# Load some data for a spatial nodes example
+snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+y <- snow$yr50
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+
+# Create an autocart model with 50 trees
+snow_model <- autocart(y, X, locations, 0.30, 0)
+
+# Predit with the spatial node effect
+new_X <- X[1:10, ]
+new_loc <- locations[1:10, ]
+spatial_node_predictions <- spatialNodes(snow_model, new_X, new_loc, distpowerRange = c(0, 2))
+
 }

@@ -27,7 +27,6 @@ double euclidDistance(double x1, double y1, double x2, double y2) {
  * assume that the locations matrix contains points that have already been
  * projected.
  */
-// [[Rcpp::export]]
 NumericMatrix getInvWeights(NumericMatrix locations, bool islonglat, int power) {
   // First get a matrix with the distances from all points to all other points
   int matrixSize = locations.rows();
@@ -154,7 +153,6 @@ double moranIVariance(NumericVector response, NumericMatrix weights) {
  * weight between an observation and itself. (i.e. assume that the diagonal
  * of the weights matrix is filled with entries of zero)
  */
-// [[Rcpp::export]]
 double moranI(NumericVector response, NumericMatrix weights) {
   // Check that the input is valid
   if (weights.rows() != weights.cols()) {
@@ -355,7 +353,7 @@ struct PSumWeights : public Worker
   // constructors
   PSumWeights(const NumericMatrix weights) : weights(weights), sumWeights(0) {}
   PSumWeights(const PSumWeights& pSumWeights, Split) : weights(pSumWeights.weights), sumWeights(0) {}
-  
+
   void operator()(std::size_t begin, std::size_t end) {
     sumWeights += std::accumulate(weights.begin() + begin, weights.begin() + end, 0.0);
   }
@@ -390,7 +388,7 @@ struct NumMI : public Worker
   const double yBar;
   const RMatrix<double> w;
   const std::size_t n;
-  
+
   // output
   double num;
 
@@ -441,10 +439,10 @@ struct DenMI : public Worker
 };
 
 double moranIParallel(NumericVector response, NumericMatrix weights) {
-  
+
   int n = response.size();
   double nn = (double) n;
-  
+
   // Get the sum of weights
   PSumWeights pSumWeights(weights);
   parallelReduce(0, weights.length(), pSumWeights);

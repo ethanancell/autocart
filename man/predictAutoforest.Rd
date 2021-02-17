@@ -41,3 +41,21 @@ A vector of predictions that correspond to the rows in \code{newdata}.
 \description{
 Make a prediction using an autoforest model returned from the \code{autoforest} function.
 }
+\examples{
+# Load some data for an autoforest example
+snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+y <- snow$yr50
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+
+# Create a control object for the autoforest tree
+snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
+
+# Create an autoforest model with 5 trees (low number chosen for computation time)
+snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
+
+# Predict for a subset of the data
+new_X <- X[1:10, ]
+new_loc <- locations[1:10, ]
+predicted_values <- predictAutoforest(snow_model, new_X, new_loc, TRUE)
+}

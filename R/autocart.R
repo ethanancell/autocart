@@ -15,7 +15,7 @@
 #' @param spatialBandwidthProportion What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}
 #' @param spatialBandwidth What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.
 #' @param asForest A logical indicating if the tree should be created as a forest component with random subsetting of predictors at each node. Set this to true if you are using this tree inside an ensemble.
-#' @param asForestMtry An integer indicating the number of predictor variables to subset at each node of the tree.
+#' @param asForestMTry An integer indicating the number of predictor variables to subset at each node of the tree.
 #' @return An object passed in to the \code{autocart} function that controls the splitting.
 #'
 #' @examples
@@ -188,25 +188,10 @@ autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdep
 #' @return The relative mean average error of the two vectors.
 #'
 #' @examples
-#' # Load some data for an autotune example
-#' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
-#'
-#' # Find optimal parameters via cross-validation. We'll search through the
-#' # following alpha/beta/bandwidth values:
-#' alphaVec <- c(0.0, 0.33, 0.66, 1.0)
-#' betaVec <- c(0.0, 0.33, 0.66, 1.0)
-#' bandwidthVec <- c(0.0, 0.33, 0.66, 1.0)
-#'
-#' # We'll find the optimal values with 5-fold cross validation:
-#' # (Due to the large number of cross-validations and trainings that occur,
-#' # this can take a few minutes.)
-#' myTune <- autotune(y, X, locations, k = 5, alphaVals = alphaVec,
-#'                    betaVals = betaVec, bandwidthVals = bandwidthVec)
-#' # Inspect the results
-#' myTune
+#' # Create two vectors, add some noise, and evaluate the RMAE.
+#' firstVec <- 1:10
+#' secondVec <- 1:10 + rnorm(10)
+#' rmae(firstVec, secondVec)
 #' @export
 rmae <- function(pred, obs, na.rm = TRUE) {
   if (length(pred) != length(obs)) {
@@ -233,6 +218,27 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' @param spatialNodesDistPowerRange The ranged power parameter p1, p2 to use for a varying power parameter
 #' @param spatialNodesModelByResidual Do the interpolative process on the residuals of the prediction formed by response average at terminal nodes
 #' @return A list of the labeled optimal parameters that were chosen for the best predictive accuracy on cross-validation.
+#'
+#' @examples
+#' # Load some data for an autotune example
+#' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+#' y <- snow$yr50
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+#'
+#' # Find optimal parameters via cross-validation. We'll search through the
+#' # following alpha/beta/bandwidth values:
+#' alphaVec <- c(0.0, 0.33, 0.66, 1.0)
+#' betaVec <- c(0.0, 0.33, 0.66, 1.0)
+#' bandwidthVec <- c(0.0, 0.33, 0.66, 1.0)
+#'
+#' # We'll find the optimal values with 5-fold cross validation:
+#' # (Due to the large number of cross-validations and trainings that occur,
+#' # this can take a few minutes.)
+#' myTune <- autotune(y, X, locations, k = 5, alphaVals = alphaVec,
+#'                    betaVals = betaVec, bandwidthVals = bandwidthVec)
+#' # Inspect the results
+#' myTune
 #'
 #' @export
 autotune <- function(response, data, locations, k = 8, control = NULL, customGroups = NULL,

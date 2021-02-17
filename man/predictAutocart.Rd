@@ -17,3 +17,18 @@ A numeric vector containing the predicted response value for each of the rows in
 \description{
 Given an autocart model object, predict for new data passed in
 }
+\examples{
+# Load some data for an autocart predict example
+snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+y <- snow$yr50
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+
+# Create an autocart model with 50 trees
+snow_model <- autocart(y, X, locations, 0.30, 0)
+
+# Predict in autocart
+new_X <- X[1:10, ]
+new_loc <- locations[1:10, ]
+autocart_predictions <- predictAutocart(snow_model, new_X)
+}

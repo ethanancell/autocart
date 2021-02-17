@@ -4,7 +4,16 @@
 \alias{autoforest}
 \title{Create a forest of autocart trees..}
 \usage{
-autoforest(response, data, locations, alpha, beta, control, numtrees)
+autoforest(
+  response,
+  data,
+  locations,
+  alpha,
+  beta,
+  control,
+  numtrees,
+  mtry = NULL
+)
 }
 \arguments{
 \item{response}{The response vector that goes along with the dataframe of predictors.}
@@ -20,6 +29,8 @@ autoforest(response, data, locations, alpha, beta, control, numtrees)
 \item{control}{A control object from the \code{autocartControl} function that will be used for each tree in the forest.}
 
 \item{numtrees}{The number of autocart trees to create in the forest.}
+
+\item{mtry}{The number of variables to subset at each node of the splitting in the trees. By default, this will be 1/3 of the features.}
 }
 \value{
 An object of type "autoforest", which is a list of the autocart trees.

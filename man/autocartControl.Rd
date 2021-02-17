@@ -18,7 +18,9 @@ autocartControl(
   spatialWeightsType = "default",
   customSpatialWeights = NULL,
   spatialBandwidthProportion = 1,
-  spatialBandwidth = NULL
+  spatialBandwidth = NULL,
+  asForest = FALSE,
+  asForestMTry = 1
 )
 }
 \arguments{
@@ -49,6 +51,10 @@ autocartControl(
 \item{spatialBandwidthProportion}{What percentage of the maximum pairwise distances should be considered the maximum distance for spatial influence? Cannot be simultaneously set with \code{spatialBandwidth}}
 
 \item{spatialBandwidth}{What is the maximum distance where spatial influence can be assumed? Cannot be simultaneously set with \code{spatialBandwidthProportion}.}
+
+\item{asForest}{A logical indicating if the tree should be created as a forest component with random subsetting of predictors at each node. Set this to true if you are using this tree inside an ensemble.}
+
+\item{asForestMTry}{An integer indicating the number of predictor variables to subset at each node of the tree.}
 }
 \value{
 An object passed in to the \code{autocart} function that controls the splitting.
