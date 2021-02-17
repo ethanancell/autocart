@@ -7,6 +7,7 @@
 #' @param beta The percentage of weighting on spatial compactness in the splitting function.
 #' @param control A control object from the \code{autocartControl} function that will be used for each tree in the forest.
 #' @param numtrees The number of autocart trees to create in the forest.
+#' @param mtry The number of variables to subset at each node of the splitting in the trees. By default, this will be 1/3 of the features.
 #' @return An object of type "autoforest", which is a list of the autocart trees.
 #'
 #' @examples
@@ -23,7 +24,7 @@
 #' snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 50)
 #'
 #' @export
-autoforest <- function(response, data, locations, alpha, beta, control, numtrees) {
+autoforest <- function(response, data, locations, alpha, beta, control, numtrees, mtry = NULL) {
 
   # Error check
   if (!is.numeric(response)) {
@@ -66,36 +67,42 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     stop("\"numtrees\" must be of length 1.")
   }
 
+
   numtrees <- as.integer(numtrees)
   n <- length(response)
   nFeatures <- ncol(data)
   mTry <- ceiling(nFeatures / 3)
 
+  if (!missing(mtry)) {
+    mTry <- mtry
+  }
+  if (mTry < 1 | mTry > nFeatures) {
+    stop("\"mtry\" is not a valid number. Ensure it is at least one and no less than the number of features.")
+  }
+
   allTrees <- vector("list", length = numtrees)
 
   for (treeIndex in 1:numtrees) {
 
-    # Bootstrapped sample of data
+    # Bootstrapped sample of data -
+    # Sample 2/3 of the data to prevent infinite spatial weights.
     indices <- 1:n
-    indices <- sample(indices, replace = TRUE)
+    indices <- sample(indices, size = as.integer((2/3)* n))
 
     thisResponse <- response[indices]
     thisData <- data[indices, ]
     thisLocations <- locations[indices, ]
 
     # Randomly choose a number of features - default 1/3 of the total number predictors
-    allFeatures <- 1:nFeatures
-    nodeFeatures <- sample(allFeatures, mTry, replace = FALSE)
+    # NOTE: This is now done at the node level inside the CPP code.
+    #allFeatures <- 1:nFeatures
+    #nodeFeatures <- sample(allFeatures, mTry, replace = FALSE)
     # Select only the data that is needed
-    thisData <- thisData[ , nodeFeatures]
+    #thisData <- thisData[ , nodeFeatures]
 
-    #browser()
-
-    af_treenum <- treeIndex
-    af_response <- thisResponse
-    af_data <- thisData
-    af_locations <- thisLocations
-    af_control <- control
+    # Split as a forest
+    control$asForest <- TRUE
+    control$asForestMTry <- mTry
 
     tree <- autocart(thisResponse, thisData, thisLocations, alpha, beta, control)
     allTrees[[treeIndex]] <- tree
