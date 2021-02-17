@@ -31,7 +31,7 @@
 using namespace Rcpp;
 
 // Set all the parameters for the tree creation
-AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool useGearyC_, bool saddlepointApproximation_, bool useParallelCalculations_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
+AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, int maxdepth_, int distpower_, int maxobsMtxCalc_, bool islonglat_, bool useGearyC_, bool saddlepointApproximation_, bool useParallelCalculations_, bool asForest_, int asForestMTry_, SpatialWeights::Type spatialWeightsType_, double spatialBandwidth_, NumericMatrix globalSpatialWeightsMatrix_, NumericMatrix globalDistanceMatrix_) {
   root = NULL;
 
   // Error check the parameters
@@ -60,6 +60,8 @@ AutoTree::AutoTree(double alpha_, double beta_, int minsplit_, int minbucket_, i
   globalDistanceMatrix = globalDistanceMatrix_;
   globalSpatialWeightsMatrix = globalSpatialWeightsMatrix_;
   useParallelCalculations = useParallelCalculations_;
+  asForest = asForest_;
+  asForestMTry = asForestMTry_;
 }
 
 // Kick off the splitting
@@ -244,6 +246,28 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     return newnode;
   }
 
+  // If this is splitting as a forest, then we need to change the predictor pool that we are sampling from.
+  std::vector<int> predictorPool;
+  int poolSize = data.length();
+  for (int i=0; i<data.length(); i++) {
+    predictorPool.push_back(i);
+  }
+  if (asForest) {
+    // Use R to randomly sample a vector.
+    Function rSample("sample");
+    NumericVector initialPool(data.length());
+    for (int i=0; i<data.length(); i++) {
+      initialPool[i] = i;
+    }
+    initialPool = rSample(initialPool, asForestMTry);
+    std::vector<int> newPool;
+    for (int i=0; i<asForestMTry; i++) {
+      newPool.push_back(initialPool[i]);
+    }
+    predictorPool = newPool;
+    poolSize = asForestMTry;
+  }
+
   // THIS IS NOT A TERMINAL NODE. PROCEED TO FIND THE BEST SPLIT THAT WE CAN HERE.
   // -----------------------------------------------------------------------------
   // Loop through all the columns, finding the best split
@@ -258,9 +282,9 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   NumericMatrix distanceMatrix = matrixSubsetCells(globalDistanceMatrix, weightsIndices, weightsIndices);
 
   CharacterVector dataframeNames = data.names();
-  for (int columnIndex=0; columnIndex<data.length(); columnIndex++) {
+  for (int columnIndex=0; columnIndex<poolSize; columnIndex++) {
 
-    String column = dataframeNames[columnIndex];
+    String column = dataframeNames[predictorPool[columnIndex]];
 
     /* We find the "goodness" vector returned by the splitting function.
      * if there is a goodness value that is better than the best one we have,

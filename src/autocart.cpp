@@ -32,12 +32,14 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int maxdepth = 30;
   int distpower = 1;
   int maxobsMtxCalc = response.size();
+  int asForestMTry = 1;
   bool islonglat = true;
   bool givePredAsFactor = true;
   bool retainCoords = true;
   bool useGearyC = false;
   bool saddlepointApproximation = false;
   bool useParallelCalculations = true;
+  bool asForest = false;
 
   SpatialWeights::Type spatialWeightsType = SpatialWeights::Regular;
   std::string spatialWeightsExtract = "default";
@@ -59,12 +61,14 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     minbucket = as<int>(autocartControl["minbucket"]);
     maxdepth = as<int>(autocartControl["maxdepth"]);
     distpower = as<int>(autocartControl["distpower"]);
+    asForestMTry = as<bool>(autocartControl["asForestMTry"]);
     islonglat = as<bool>(autocartControl["islonglat"]);
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
     retainCoords = as<bool>(autocartControl["retainCoords"]);
     useGearyC = as<bool>(autocartControl["useGearyC"]);
     saddlepointApproximation = as<bool>(autocartControl["saddlepointApproximation"]);
     useParallelCalculations = as<bool>(autocartControl["runParallel"]);
+    asForest = as<bool>(autocartControl["asForest"]);
 
     // Make sure that minbucket is sensical compared to minsplit. If minbucket is half of minsplit, then
     // the code will crash.
@@ -197,13 +201,13 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   }
 
   // The "createTree" method in AutoTree.cpp does all the hard work in creating the splits
-  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, useGearyC, saddlepointApproximation, useParallelCalculations, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
+  AutoTree tree(alpha, beta, minsplit, minbucket, maxdepth, distpower, maxobsMtxCalc, islonglat, useGearyC, saddlepointApproximation, useParallelCalculations, asForest, asForestMTry, spatialWeightsType, spatialBandwidth, spatialWeightsMatrix, distanceMatrix);
   tree.createTree(response, data, locations);
 
   // List members
   NumericVector prediction = tree.predictDataFrame(data);
   DataFrame splitframe = tree.createSplitDataFrame();
-  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["useGearyC"] = useGearyC, _["spatialWeightsType"] = spatialWeightsExtract, _["spatialBandwidth"] = spatialBandwidth);
+  List splitparams = List::create(_["minsplit"] = minsplit, _["minbucket"] = minbucket, _["maxdepth"] = maxdepth, _["distpower"] = distpower, _["islonglat"] = islonglat, _["alpha"] = alpha, _["beta"] = beta, _["useGearyC"] = useGearyC, _["asForest"] = asForest, _["asForestMTry"] = asForestMTry, _["spatialWeightsType"] = spatialWeightsExtract, _["spatialBandwidth"] = spatialBandwidth);
 
   // If the "givePredAsFactor" is set to true, then convert the prediction vector into a factor and label it from 1 to the number of regions
   // Construct the S3 object that contains information about the model
