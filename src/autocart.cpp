@@ -1,3 +1,4 @@
+#include <cmath>
 #include <RcppArmadillo.h>
 // [[Rcpp::depends(RcppArmadillo)]]
 
@@ -42,7 +43,6 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int maxdepth = 30;
   int distpower = 1;
   int maxobsMtxCalc = response.size();
-  int asForestMTry = 1;
   bool islonglat = true;
   bool givePredAsFactor = true;
   bool retainCoords = true;
@@ -59,6 +59,21 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   NumericMatrix spatialWeightsMatrix;
   NumericMatrix distanceMatrix;
 
+  // Predictor numbers
+  int p = data.ncol();
+
+  // Get correct mTry. by default set to floor of predictors/3
+  int asForestMTry = floor(p / 3);
+
+  // Warn if locations matrix contains high entries
+  bool location_warned = false;
+  for (int i=0; i<locations.nrow(); i++) {
+    if ((abs(locations(i, 0)) > 40000 || abs(locations(i, 1)) > 40000) && !location_warned) {
+      warning("Location entries detected to be numerically large. This may likely cause an overflow error when calculating distances. Consider rescaling your coordinate values to something smaller.");
+      location_warned = true;
+    }
+  }
+
   // Extract info from autocartControl
   if (control.isNotNull()) {
     List autocartControl = as<List>(control);
@@ -71,7 +86,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     minbucket = as<int>(autocartControl["minbucket"]);
     maxdepth = as<int>(autocartControl["maxdepth"]);
     distpower = as<int>(autocartControl["distpower"]);
-    asForestMTry = as<bool>(autocartControl["asForestMTry"]);
+    //asForestMTry = as<bool>(autocartControl["asForestMTry"]);
     islonglat = as<bool>(autocartControl["islonglat"]);
     givePredAsFactor = as<bool>(autocartControl["givePredAsFactor"]);
     retainCoords = as<bool>(autocartControl["retainCoords"]);

@@ -148,7 +148,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Error check
       if (nextNode->isTerminalNode) {
         // Rcout << "Node: " << nodesInTree << std::endl;
-        stop("Error in autocart: no first split could be created. Most likely, there is a problem with the spatial weights matrix. Do you have repeat coordinates in your dataset?");
+        stop("Error in autocart: no first split could be created. Most likely, there is a problem with the spatial weights matrix.");
       }
 
       // Split the data according to what's contained in "nextNode"
@@ -266,6 +266,13 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     }
     predictorPool = newPool;
     poolSize = asForestMTry;
+
+    // Print the predictor pool for debugging
+    /*Rcout << "predictor pool: ";
+    for (int i=0; i<asForestMTry; i++) {
+      Rcout << predictorPool[i] << ", ";
+    }*/
+    //Rcout << std::endl;
   }
 
   // THIS IS NOT A TERMINAL NODE. PROCEED TO FIND THE BEST SPLIT THAT WE CAN HERE.
@@ -338,6 +345,16 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   // If no better split is ever found, then we can simply call this a terminal node, just
   // like we did with the stopping condition.
   if (!betterSplitFound) {
+    // Objective function vector is likely a vector of zeros. What does the response look like?
+    /*
+    Rcout << "Response: " << response << std::endl;
+    Rcout << "Data: " << std::endl;
+    for (int columnIndex=0; columnIndex<poolSize; columnIndex++) {
+      std::string column = Rcpp::as<std::string>(dataframeNames[predictorPool[columnIndex]]);
+      // std::string cname = Rcpp::as<std::string>(column);
+      Rcout << column << ": " << data[String(column)] << std::endl;
+    }
+    */
     node* newnode = new node{-1, -1, "N/A", numObs, averageResponse, true, false, response, data, locations, weightsIndices, RSS, groupMoranI, groupMoranISD, groupGearyC, NULL, NULL};
     return newnode;
   }
@@ -470,6 +487,9 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
     }
   }
 
+  // Optional output for weird crashes
+  // Rcout << goodness << std::endl;
+
   return goodness;
 }
 
@@ -513,7 +533,12 @@ NumericVector AutoTree::splitCategorical(NumericVector response, IntegerVector x
   t1 = (1-alpha-beta) * t1;
   t2 = alpha * t2;
   t3 = beta * t3;
-  return t1 + t2 + t3;
+  NumericVector objective = t1 + t2 + t2;
+
+  // Optional output for weird crashes
+  // Rcout << objective << std::endl;
+
+  return objective;
 }
 
 /*
