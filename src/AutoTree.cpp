@@ -148,7 +148,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Error check
       if (nextNode->isTerminalNode) {
         // Rcout << "Node: " << nodesInTree << std::endl;
-        stop("Error: trying to make a split on a node that has already been classified as a terminal node.");
+        stop("Error in autocart: no first split could be created. Most likely, there is a problem with the spatial weights matrix. Do you have repeat coordinates in your dataset?");
       }
 
       // Split the data according to what's contained in "nextNode"
@@ -441,6 +441,11 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
       //t3 = continuousGoodnessBySeparation(as<arma::mat>(orderedLocations), n, minbucket);
     }
   }
+
+  // DEBUG: what do the objective function vectors look like?
+  // Rcout << "t1: " << t1 << std::endl;
+  // Rcout << "t2: " << t2 << std::endl;
+  // stop("");
 
   // Return the linear combination of the goodness values
   t1 = (1-alpha-beta) * t1;

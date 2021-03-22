@@ -205,6 +205,32 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
     stop("locations, distanceMatrix, and spatialWeightsMatrix must have the same number of rows.");
   }
 
+  // Ensure that the spatial weights matrix doesn't contain any weird values that would stop the tree from working.
+  bool na_found = false;
+  bool inf_found = false;
+  int sum_na = 0;
+  int sum_inf = 0;
+  for (int i=0; i<spatialWeightsMatrix.nrow(); i++) {
+    for (int j=i; j<spatialWeightsMatrix.ncol(); j++) {
+      if (NumericVector::is_na(spatialWeightsMatrix(i, j))) {
+        sum_na++;
+        na_found = true;
+      }
+      if (Rcpp::traits::is_infinite<REALSXP>(spatialWeightsMatrix(i, j))) {
+        sum_inf++;
+        inf_found = true;
+      }
+    }
+  }
+  if (na_found) {
+    warning("NA value found in spatial weights matrix. Quietly setting this weight to be a 0 weight.");
+    Rcout << "(" << sum_na << " NAs were found in the spatial weights matrix)" << std::endl;
+  }
+  if (inf_found) {
+    warning("Infinite value found in spatial weights matrix. Quietly setting this weight to be a 0 weight. Do you have repeat locations in your locations matrix?");
+    Rcout << "(" << sum_inf << " infinite weights were found in the spatial weights matrix)" << std::endl;
+  }
+
   // Once saddlepoint approximation has been implemented, you can remove this warning right here
   if (saddlepointApproximation == true) {
     warning("The saddlepoint approximation to Moran's I is a loose end that has not been fully implemented in the autocart package, and will use exact Moran's I instead. To reduce computation time, consider the \"maxobsMtxCalc\" splitting parameter at the moment.");
