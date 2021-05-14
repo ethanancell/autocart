@@ -28,9 +28,9 @@ Create an autocart model
 \examples{
 # Load some data for an autocart example
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+y <- snow$yr50[1:40]
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
 
 # Create an autocart model with 50 trees
 snow_model <- autocart(y, X, locations, 0.30, 0)

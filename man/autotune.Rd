@@ -61,10 +61,13 @@ Find the best alpha, beta, and bandwidth values with k-fold cross-validation
 }
 \examples{
 # Load some data for an autotune example
+# (Note that a low sample size is used here for quick example computation.
+#  In a practical application this function can be quite computationally
+#  demanding due to the grid-search nature of the function.)
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+y <- snow$yr50[1:35]
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:35, ]
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:35, ]
 
 # Find optimal parameters via cross-validation. We'll search through the
 # following alpha/beta/bandwidth values:
@@ -75,7 +78,7 @@ bandwidthVec <- c(0.0, 0.33, 0.66, 1.0)
 # We'll find the optimal values with 5-fold cross validation:
 # (Due to the large number of cross-validations and trainings that occur,
 # this can take a few minutes.)
-myTune <- autotune(y, X, locations, k = 5, alphaVals = alphaVec,
+myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
                    betaVals = betaVec, bandwidthVals = bandwidthVec)
 # Inspect the results
 myTune

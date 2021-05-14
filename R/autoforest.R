@@ -13,9 +13,9 @@
 #' @examples
 #' # Load some data for an autoforest example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+#' y <- snow$yr50[1:40]
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
 #'
 #' # Create a control object for the autoforest tree
 #' snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
@@ -128,9 +128,9 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
 #' @examples
 #' # Load some data for an autoforest example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+#' y <- snow$yr50[1:40]
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
 #'
 #' # Create a control object for the autoforest tree
 #' snow_control <- autocartControl(spatialBandwidthProportion = 1.0)

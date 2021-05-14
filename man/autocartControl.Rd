@@ -62,9 +62,9 @@ Create the object used for the controlling of the splits in the autocart model
 \examples{
 # Load some data for an autocartControl example
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))
+y <- snow$yr50[1:40]
+X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:40, ]
+locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
 
 # Create a control object that disallows the tree from having a depth more
 # than 10 and give spatial weights only to observations that are a third of the
