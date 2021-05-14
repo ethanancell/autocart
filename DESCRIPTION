@@ -1,7 +1,7 @@
 Package: autocart
 Type: Package
 Title: Autocorrelation Regression Trees
-Version: 1.4.2
+Version: 1.4.3
 Authors@R: person("Ethan", "Ancell", email = "ethanancell@gmail.com", role = c("aut", "cre"))
 Maintainer: Ethan Ancell <ethanancell@gmail.com>
 Description: A modified version of the classification and regression tree (CART) 
@@ -13,7 +13,7 @@ Description: A modified version of the classification and regression tree (CART)
     <arXiv:2101.08258>.
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
+LazyData: false
 Depends:
     fields,
     mgcv

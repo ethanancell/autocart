@@ -71,9 +71,9 @@ locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:35, ]
 
 # Find optimal parameters via cross-validation. We'll search through the
 # following alpha/beta/bandwidth values:
-alphaVec <- c(0.0, 0.33, 0.66, 1.0)
-betaVec <- c(0.0, 0.33, 0.66, 1.0)
-bandwidthVec <- c(0.0, 0.33, 0.66, 1.0)
+alphaVec <- c(0.0, 0.5)
+betaVec <- c(0.0, 0.2)
+bandwidthVec <- c(1.0)
 
 # We'll find the optimal values with 5-fold cross validation:
 # (Due to the large number of cross-validations and trainings that occur,

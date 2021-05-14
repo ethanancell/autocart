@@ -48,7 +48,7 @@ locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
 # Create a control object for the autoforest tree
 snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
 
-# Create an autoforest model with 50 trees
-snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 50)
+# Create an autoforest model with 5 trees
+snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
 
 }
