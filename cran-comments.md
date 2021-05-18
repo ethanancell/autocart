@@ -1,8 +1,8 @@
 ## Resubmission
 This is a resubmission. In this version I have:
 
-* Added small executable examples in my Rd-files to show the use of the exported function.
-* Added a citation in the DESCRIPTION file to an arXiv paper describing the methods in my package.
+* Removed the floor() function that was causing compilation issues on Solaris.
+* Changed header file that was causing compilation issues on Fedora with clang compiler.
 
 ## Test environments
 * ubuntu 16.04.6 LTS (on travis-ci) with R 4.02

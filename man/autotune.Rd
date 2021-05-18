@@ -75,7 +75,7 @@ alphaVec <- c(0.0, 0.5)
 betaVec <- c(0.0, 0.2)
 bandwidthVec <- c(1.0)
 
-# We'll find the optimal values with 5-fold cross validation:
+# We'll find the optimal values with 3-fold cross validation:
 # (Due to the large number of cross-validations and trainings that occur,
 # this can take a few minutes.)
 myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
