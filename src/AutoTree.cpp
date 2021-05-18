@@ -23,7 +23,8 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include <math.h>
-#include <bits/stdc++.h>
+#include <stack>
+// #include <bits/stdc++.h>
 #include "AutoTree.h"
 #include "SpatialMethods.h"
 #include "SplittingMethods.h"

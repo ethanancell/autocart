@@ -63,7 +63,7 @@ List autocart(NumericVector response, DataFrame data, NumericMatrix locations, d
   int p = data.ncol();
 
   // Get correct mTry. by default set to floor of predictors/3
-  int asForestMTry = floor(p / 3);
+  int asForestMTry = p / 3;
 
   // Warn if locations matrix contains high entries
   bool location_warned = false;
