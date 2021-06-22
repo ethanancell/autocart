@@ -1,3 +1,121 @@
+#' Create an autocart model
+#'
+#' @param formula An R formula specifying the model.
+#' @param data A SpatialPointsDataFrame that contains all the information we will be splitting with,
+#' along with the coordinate information attached to the dataframe.
+#' @param alpha A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.
+#' @param beta A scalar value between 0 and 1 to weight the shape of the region in the splitting
+#' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
+#' @return An S3 object of class "autocart".
+#'
+#' @examples
+#' # Load some data for an autocart example
+#' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+#' y <- snow$yr50[1:40]
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#'
+#' # Create an autocart model with 50 trees
+#' snow_model <- autocart(y, X, locations, 0.30, 0)
+#'
+#' @import fields
+#' @importFrom RcppParallel RcppParallelLibs
+#' @export
+autocart <- function(formula, data, alpha, beta, control = NULL) {
+  # Error check
+  if (!class(data) == "SpatialPointsDataFrame") {
+    stop("\"data\" must be a sp::SpatialPointsDataFrame.")
+  }
+
+  modelframe <- model.frame(formula, data@data)
+  y_vector <- as.numeric(modelframe[, 1])
+  X_matrix <- modelframe[, -1]
+  locations <- data@coords
+
+  # After unraveling all of this, pass it into the CPP function behind
+  # the scenes
+  return(autocart_cpp(y_vector, X_matrix, locations, alpha, beta, control))
+}
+
+#' Given an autocart model object, predict for new data passed in
+#'
+#' @param model An autocart object returned from the autocart() function
+#' @param newdata A dataframe for prediction. If using spatialNodes = TRUE, then
+#' this dataframe must be a SpatialPointsDataFrame.
+#' @param spatialNodes A boolean indicating whether or not to use a spatial process
+#' at the terminal nodes of the autocart tree
+#' @param p The power to use in IDW interpolation when using spatial nodes.
+#' @param pRange A range of powers to use in IDW interpolation when using spatial nodes.
+#' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
+#'
+#' @examples
+#' # Load some data for an autocart predict example
+#' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
+#' y <- snow$yr50[1:40]
+#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
+#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#'
+#' snow_model <- autocart(y, X, locations, 0.30, 0)
+#'
+#' # Predict in autocart
+#' new_X <- X[1:10, ]
+#' new_loc <- locations[1:10, ]
+#' autocart_predictions <- predictAutocart(snow_model, new_X)
+#' @export
+predict.autocart <- function(model, newdata, spatialNodes = FALSE,
+                             p = NULL, pRange = NULL) {
+  # Basic error checking
+  if (class(newdata) != "data.frame" & class(newdata) != "SpatialPointsDataFrame") {
+    stop("\"newdata\" must be either a data.frame or a SpatialPointsDataFrame.")
+  }
+  if (!is.logical(spatialNodes)) {
+    stop("\"spatialNodes\" must be a logical value.")
+  }
+  if (!missing(p) & !is.numeric(p)) {
+    stop("\"p\" must be numeric.")
+  }
+  if (!missing(pRange)) {
+    if (length(pRange) != 2) {
+      stop("\"pRange\" must have exactly two elements.")
+    }
+    if (!is.numeric(pRange)) {
+      stop("\"pRange\" must be a numeric vector.")
+    }
+  }
+
+  # Follow the two different processes if spatialNodes is true or not.
+  if (spatialNodes) {
+    # Make sure we have a SpatialPointsDataFrame
+    if (class(newdata) != "SpatialPointsDataFrame") {
+      stop("When using spatialNodes feature, \"newdata\" must be a sp::SpatialPointsDataFrame.")
+    }
+
+    data_direct <- newdata@data
+    data_coords <- newdata@coords
+
+    if (missing(p) & !missing(pRange)) {
+      return(spatialNodes(model, data_direct, data_coords, method = "idw",
+                          distpowerRange = pRange))
+    } else if (!missing(p) & missing(pRange)) {
+      return(spatialNodes(model, data_direct, data_coords, method = "idw",
+                          distpower = p))
+    } else if (!missing(p) & !missing(pRange)) {
+      stop("Both p and pRange are supplied when requesting spatial nodes. This is ambiguous.")
+    } else {
+      stop("Neither p or pRange is supplied when requesting spatial nodes.")
+    }
+  } else {
+    # Not using a spatial nodes procedure
+    data_direct <- newdata
+    if (class(newdata) == "SpatialPointsDataFrame") {
+      # Not a problem, just need to remove the unnecessary coordinate information
+      data_direct <- newdata@data
+    }
+
+    return(predictAutocart(model, data_direct))
+  }
+}
+
 #' Create the object used for the controlling of the splits in the autocart model
 #'
 #' @param minsplit The minimum observations in a node before a split is attempted
@@ -204,12 +322,14 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' @param alphaVals Override the alpha values that are expanded in the grid in this function.
 #' @param betaVals Override the beta values that are expanded in the grid in this function.
 #' @param bandwidthVals Override the bandwidth values that are expanded in the grid in this function.
+#' @param powerVals The values of the power parameter to check in the expanded grid.
+#' @param rangedPowerOffset Given a power parameter in powerVals, this is the
+#' plus/minus amount of offset given to p for use in a ranged power parameter setting. For example,
+#' with p=3 and rangedPowerOffset=0.4, we use p1=2.6 and p2=3.4. This parameter to the function
+#' reduces the massive computational effort in tuning both p1 and p2. Set this to
+#' 0 if you don't want to tune with a ranged power parameter.
 #' @param outputProgress Print the result of the cross-validations as you are going. This is useful when the cross-validation will be very long and you do not wish to wait.
 #' @param useSpatialNodes Use an interpolative process at the terminal nodes of the autocart tree for the prediction process
-#' @param spatialNodesMethod The type of interpolation to use at the terminal nodes
-#' @param spatialNodesDistPower The power parameter to use in inverse distance weighting at terminal nodes
-#' @param spatialNodesDistPowerRange The ranged power parameter p1, p2 to use for a varying power parameter
-#' @param spatialNodesModelByResidual Do the interpolative process on the residuals of the prediction formed by response average at terminal nodes
 #' @return A list of the labeled optimal parameters that were chosen for the best predictive accuracy on cross-validation.
 #'
 #' @examples
@@ -227,21 +347,21 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' alphaVec <- c(0.0, 0.5)
 #' betaVec <- c(0.0, 0.2)
 #' bandwidthVec <- c(1.0)
+#' powerVec <- c(2.0)
 #'
 #' # We'll find the optimal values with 3-fold cross validation:
 #' # (Due to the large number of cross-validations and trainings that occur,
 #' # this can take a few minutes.)
 #' myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
-#'                    betaVals = betaVec, bandwidthVals = bandwidthVec)
+#'                    betaVals = betaVec, bandwidthVals = bandwidthVec,
+#'                    powerVals = powerVec)
 #' # Inspect the results
 #' myTune
 #'
 #' @export
-autotune <- function(response, data, locations, k = 8, control = NULL, customGroups = NULL,
+autotune <- function(response, data, locations, k = 5, control = NULL, customGroups = NULL,
                      alphaVals = NULL, betaVals = NULL, bandwidthVals = NULL,
-                     outputProgress = FALSE, useSpatialNodes = FALSE,
-                     spatialNodesMethod = "idw", spatialNodesDistPower = 2,
-                     spatialNodesDistPowerRange = c(0, 2), spatialNodesModelByResidual = FALSE) {
+                     powerVals = NULL, rangedPowerOffset = 0, outputProgress = FALSE) {
 
   # Use a default control if nothing is supplied
   if (missing(control)) {
@@ -286,12 +406,10 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
   if (!missing(k) & !missing(customGroups)) {
     warning("Both \"k\" and \"customGroups\" supplied to autotune, this is ambiguous. Will cross-validate with customGroups.")
   }
-  if (!useSpatialNodes & (!missing(spatialNodesMethod) | !missing(spatialNodesDistPower) | !missing(spatialNodesDistPowerRange) | !missing(spatialNodesModelByResidual))) {
-    warning("Spatial nodes custom parameters are supplied when \"useSpatialNodes\" parameter has been specified to be FALSE.")
-  }
 
   # If the range of alpha/beta/bandwidth is not supplied, then we create them here
   defaultStep <- 0.20
+  useSpatialNodes <- TRUE
   if (missing(alphaVals)) {
     alphaVals <- seq(0, 1.0, defaultStep)
   }
@@ -301,9 +419,13 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
   if (missing(bandwidthVals)) {
     bandwidthVals <- seq(defaultStep, 1.0, defaultStep)
   }
+  if (missing(powerVals)) {
+    useSpatialNodes <- FALSE
+  }
 
   # Create the grid of all alpha, beta, and bandwidth proportion values
-  testingGrid <- expand.grid(alpha = alphaVals, beta = betaVals, bandwidth = bandwidthVals)
+  testingGrid <- expand.grid(alpha = alphaVals, beta = betaVals,
+                             bandwidth = bandwidthVals, idwPower = powerVals)
 
   # Take out all the rows where alpha+beta is greater than 1
   testingGrid <- testingGrid[(testingGrid$alpha + testingGrid$beta) <= 1.0, ]
@@ -322,13 +444,14 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
   }
 
   # With all the configurations in testingGrid, return the error rate.
-  minimumRMAE <- 100000
+  minimumRMAE <- 10000000
   rowWithBestRMAE <- -1
   testingRMAE <- vector(mode = "numeric", length = nrow(testingGrid))
   for (testingRow in 1:nrow(testingGrid)) {
     myAlpha <- testingGrid$alpha[testingRow]
     myBeta <- testingGrid$beta[testingRow]
     myBandwidth <- testingGrid$bandwidth[testingRow]
+    myPower <- testingGrid$idwPower[testingRow]
 
     control$spatialBandwidthProportion <- myBandwidth
 
@@ -346,14 +469,14 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
 
       # Make the prediction depending on the type of prediction process
       if (useSpatialNodes) {
-        if (missing(spatialNodesDistPowerRange)) {
+        if (rangedPowerOffset == 0) {
           predVector[xvs == fold] <- spatialNodes(trainedModel, test_data, test_locations,
-                                                  spatialNodesMethod, spatialNodesDistPower,
-                                                  modelByResidual = spatialNodesModelByResidual, decideByGC = FALSE)
+                                                  distpower = myPower,
+                                                  decideByGC = FALSE)
         } else {
           predVector[xvs == fold] <- spatialNodes(trainedModel, test_data, test_locations,
-                                                  spatialNodesMethod, distpowerRange = spatialNodesDistPowerRange,
-                                                  modelByResidual = spatialNodesModelByResidual, decideByGC = FALSE)
+                                                  distpowerRange = c(myPower - rangedPowerOffset, myPower + rangedPowerOffset),
+                                                  decideByGC = FALSE)
         }
       } else {
         predVector[xvs == fold] <- predictAutocart(trainedModel, test_data)
@@ -365,7 +488,8 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
     testingRMAE[testingRow] <- rmae(predVector, response)
 
     if (outputProgress) {
-      print(paste("CV ", testingRow, "/", nrow(testingGrid), sep=""))
+      print(paste("CV ", testingRow, "/", nrow(testingGrid), " (a=", myAlpha,
+                  ", b=", myBeta, ", bw=", myBandwidth, ", p=", myPower, ")", sep=""))
       if (thisRMAE < minimumRMAE) {
         print(paste("New min RMAE:", thisRMAE))
       }
@@ -380,5 +504,6 @@ autotune <- function(response, data, locations, k = 8, control = NULL, customGro
   list(alpha = testingGrid$alpha[rowWithBestRMAE],
        beta = testingGrid$beta[rowWithBestRMAE],
        bandwidth = testingGrid$bandwidth[rowWithBestRMAE],
+       power = testingGrid$idwPower[rowWithBestRMAE],
        bestRMAE = minimumRMAE)
 }

@@ -19,7 +19,8 @@ Depends:
     mgcv
 Imports:
     Rcpp,
-    RcppParallel
+    RcppParallel,
+    sp
 LinkingTo: 
     Rcpp,
     RcppArmadillo,

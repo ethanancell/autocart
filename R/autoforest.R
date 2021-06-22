@@ -1,11 +1,11 @@
-#' Create a forest of autocart trees..
+#' Create a forest of autocart trees.
 #'
-#' @param response The response vector that goes along with the dataframe of predictors.
-#' @param data The dataframe of predictors.
-#' @param locations A matrix of the locations of the dataframe of predictors.
-#' @param alpha The percentage of weighting on spatial autocorrelation in the splitting function.
-#' @param beta The percentage of weighting on spatial compactness in the splitting function.
-#' @param control A control object from the \code{autocartControl} function that will be used for each tree in the forest.
+#' @param formula An R formula specifying the model.
+#' @param data A SpatialPointsDataFrame that contains all the information we will be splitting with,
+#' along with the coordinate information attached to the dataframe.
+#' @param alpha A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.
+#' @param beta A scalar value between 0 and 1 to weight the shape of the region in the splitting
+#' @param control An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.
 #' @param numtrees The number of autocart trees to create in the forest.
 #' @param mtry The number of variables to subset at each node of the splitting in the trees. By default, this will be 1/3 of the features.
 #' @return An object of type "autoforest", which is a list of the autocart trees.
@@ -24,17 +24,12 @@
 #' snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
 #'
 #' @export
-autoforest <- function(response, data, locations, alpha, beta, control, numtrees, mtry = NULL) {
+autoforest <- function(formula, data, alpha, beta, control = autocartControl(), numtrees = 50, mtry = NULL) {
 
-  # Error check
-  if (!is.numeric(response)) {
-    stop("Response vector must be a numeric type.")
-  }
-  if (!is.data.frame(data)) {
-    stop("\"data\" argument must be of type data.frame.")
-  }
-  if (!is.matrix(locations)) {
-    stop("\"locations\" argument must be a matrix.")
+  # Get data in correct form with model.frame
+  if (class(data) != "SpatialPointsDataFrame") {
+    print(class(data))
+    stop("\"data\" must be an object of type sp::SpatialPointsDataFrame.")
   }
   if (!is.numeric(alpha)) {
     stop("Alpha argument is not numeric.")
@@ -48,15 +43,6 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
   if (!is.numeric(numtrees)) {
     stop("\"numtrees\" argument is not numeric.")
   }
-  if (length(response) != nrow(data)) {
-    stop("Response vector must have the same length as the number of rows in \"data\"")
-  }
-  if (nrow(data) != nrow(locations)) {
-    stop("\"data\" and \"locations\" must have the same number of rows.")
-  }
-  if (ncol(locations) != 2) {
-    stop("\"locations\" matrix must have exactly two columns.")
-  }
   if (length(alpha) != 1) {
     stop("\"alpha\" must be of length 1.")
   }
@@ -67,9 +53,8 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     stop("\"numtrees\" must be of length 1.")
   }
 
-
   numtrees <- as.integer(numtrees)
-  n <- length(response)
+  n <- nrow(data)
   nFeatures <- ncol(data)
   mTry <- ceiling(nFeatures / 3)
 
@@ -87,42 +72,30 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
     # Bootstrapped sample of data -
     # Sample 2/3 of the data to prevent infinite spatial weights.
     indices <- 1:n
-    indices <- sample(indices, size = as.integer((2/3)* n))
+    # indices <- sample(indices, size = as.integer((2/3)* n))
 
-    thisResponse <- response[indices]
     thisData <- data[indices, ]
-    thisLocations <- locations[indices, ]
-
-    # Randomly choose a number of features - default 1/3 of the total number predictors
-    # NOTE: This is now done at the node level inside the CPP code.
-    #allFeatures <- 1:nFeatures
-    #nodeFeatures <- sample(allFeatures, mTry, replace = FALSE)
-    # Select only the data that is needed
-    #thisData <- thisData[ , nodeFeatures]
 
     # Split as a forest
     control$asForest <- TRUE
     control$asForestMTry <- mTry
 
-    tree <- autocart(thisResponse, thisData, thisLocations, alpha, beta, control)
+    tree <- autocart(formula, thisData, alpha, beta, control)
     allTrees[[treeIndex]] <- tree
   }
-
-  class(allTrees) <- append(class(allTrees), "autoforest")
+  class(allTrees) <- "autoforest"
   allTrees
 }
 
 #' Make a prediction using an autoforest model returned from the \code{autoforest} function.
 #'
-#' @param autoforestModel An S3 object of type "autoforest" returned from the \code{autoforest} function.
-#' @param newdata The dataframe of predictors for use in prediction.
-#' @param newdataCoords the matrix of locations for all the information in newdata. Required argument if you set "useSpatialNodes" to TRUE.
-#' @param useSpatialNodes If TRUE, instead of running all the observations through the autocart tree, use the \code{spatialNodes} function to make predictions.
-#' @param method If using the spatial nodes type of prediction, then the type of interpolation to use. The options are "idw" and "tps".
-#' @param distpower If using "idw" for the method, the power on distance. For example, setting this to 2 would mean inverse squared distance squared weighting.
-#' @param distpowerRange If using "idw" for the interpolation method, the range of distance powers to use on inverse distance weighting matched to terminal node Moran I measurements.
-#' @param modelByResidual When using interpolation, make a prediction using the region of interest's average and then interpolate the residual.
-#' @param decideByGC Use Geary's C in deciding to induce a local spatial process rather than Moran's I.
+#' @param model An S3 object of type "autoforest" returned from the \code{autoforest} function.
+#' @param newdata The dataframe of predictors for use in prediction. If using
+#' spatial nodes, this must be a SpatialPointsDataFrame.
+#' @param spatialNodes A boolean indicating whether or not to use a spatial process
+#' at the terminal nodes of the tree
+#' @param p The power to use in IDW interpolation when using spatial nodes.
+#' @param pRange A range of powers to use in IDW interpolation with spatial nodes.
 #' @return A vector of predictions that correspond to the rows in \code{newdata}.
 #'
 #' @examples
@@ -143,65 +116,51 @@ autoforest <- function(response, data, locations, alpha, beta, control, numtrees
 #' new_loc <- locations[1:10, ]
 #' predicted_values <- predictAutoforest(snow_model, new_X, new_loc, TRUE)
 #' @export
-predictAutoforest <- function(autoforestModel, newdata, newdataCoords = NULL, useSpatialNodes = FALSE,
-                              method = "idw", distpower = 2, distpowerRange = c(0, 2),
-                              modelByResidual = TRUE, decideByGC = FALSE) {
-
+predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
+                              p = NULL, pRange = NULL) {
   # Error check
-  if (!inherits(autoforestModel, "autoforest")) {
-    stop("\"autoforestModel\" parameter must be of type \"autoforest\", returned from the autoforest() function.")
+  if (!inherits(model, "autoforest")) {
+    stop("\"model\" must be of type \"autoforest\", returned from the autoforest() function.")
   }
-  if (useSpatialNodes & missing(newdataCoords)) {
-    stop("If using spatialNodes in predictAutoforest, newdataCoords must be provided.")
+  if (class(newdata) != "data.frame" & class(newdata) != "SpatialPointsDataFrame") {
+    stop("\"newdata\" must be either a data.frame or a SpatialPointsDataFrame.")
   }
-  if (!is.data.frame(newdata)) {
-    stop("newdata must be a dataframe.")
-  }
-  if (!is.matrix(newdataCoords)) {
-    stop("newdataCoords must be a matrix.")
-  }
-  if (nrow(newdata) != nrow(newdataCoords)) {
-    stop("Number of rows in newdata and newdataCoords must be the same.")
-  }
-  if (ncol(newdataCoords) != 2) {
-    stop("newdataCoords must have exactly two columns.")
-  }
-  if (!is.numeric(distpowerRange)) {
+  if (!missing(p) & !is.numeric(p)) {
     stop("\"distpowerRange\" must be a numeric vector.")
   }
-  if (length(distpowerRange) != 2) {
-    stop("\"distpowerRange\" must have exactly two elements.")
-  }
-  if (distpowerRange[2] <= distpowerRange[1]) {
-    stop("distpowerRange's second element must be greater than its first element.")
-  }
-  if (!missing(distpowerRange) & !missing(distpower)) {
-    stop("Both distpowerRange and distpower are provided in spatialNodes, this is ambiguous.")
-  }
-
-  # Warnings
-  if (!useSpatialNodes & (!missing(method) | !missing(distpower) | !missing(decideByGC) | !missing(distpowerRange) | !missing(modelByResidual))) {
-    warning("Spatial nodes parameters \"method\", \"distpower\" \"distpowerRange\", \"modelByResidual\", and \"decideByGC\" are being ignored as useSpatialNodes is FALSE.")
-  }
-
-
-  # Induce a spatial process at the terminal nodes if desired
-  if (!useSpatialNodes) {
-    predictionList <- lapply(autoforestModel, predictAutocart, newdata)
-  } else {
-    if (!missing(distpowerRange)) {
-      predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
-                               newdataCoords = newdataCoords, method = method,
-                               distpowerRange = distpowerRange,
-                               modelByResidual = modelByResidual, decideByGC = decideByGC)
-    } else {
-      predictionList <- lapply(autoforestModel, spatialNodes, newdata = newdata,
-                               newdataCoords = newdataCoords, method = method,
-                               distpower = distpower,
-                               modelByResidual = modelByResidual, decideByGC = decideByGC)
+  if (!missing(pRange)) {
+    if (length(pRange) != 2) {
+      stop("\"distpowerRange\" must have exactly two elements.")
+    }
+    if (!is.numeric(pRange)) {
+      stop("\"pRange\" must be a numeric vector.")
     }
   }
 
+  # Induce a spatial process at the terminal nodes if desired
+  if (spatialNodes) {
+    # Make sure we have a SpatialPointsDataFrame
+    if (class(newdata) != "SpatialPointsDataFrame") {
+      stop("When using spatialNodes feature, \"newdata\" must be an sp::SpatialPointsDataFrame.")
+    }
+
+    data_direct <- newdata@data
+    data_coords <- newdata@coords
+
+    if (missing(p) & !missing(pRange)) {
+      predictionList <- lapply(model, spatialNodes, data_direct, data_coords,
+                               method = "idw", distpowerRange = pRange)
+    } else if (!missing(p) & missing(pRange)) {
+      predictionList <- lapply(model, spatialNodes, data_direct, data_coords,
+                               method = "idw", distpower = p)
+    } else if (!missing(p) & !missing(pRange)) {
+      stop("Both p and pRange are supplied when requesting spatial nodes. This is ambiguous.")
+    } else {
+      stop("Neither p or pRange is supplied when requesting spatial nodes.")
+    }
+  } else {
+    predictionList <- lapply(model, predict, newdata)
+  }
 
   numTrees <- length(predictionList)
 

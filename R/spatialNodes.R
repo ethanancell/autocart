@@ -9,7 +9,6 @@
 #' @param method The type of interpolation to use. Options are "idw" for inverse distance weighting and "tps" for thin-plate splines.
 #' @param distpower the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.
 #' @param distpowerRange A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by Moran I to the range mentioned in distpower.
-#' @param modelByResidual If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.
 #' @param decideByGC When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?
 #' @return a prediction for the observations that are represented by \code{newdata} and \code{newdataCoords}
 #'
@@ -31,9 +30,8 @@
 #' @import fields
 #' @import mgcv
 #' @import stats
-#' @export
 spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", distpower = 2,
-                         distpowerRange = c(0, 2), modelByResidual = TRUE, decideByGC = FALSE) {
+                         distpowerRange = c(0, 2), decideByGC = FALSE) {
 
   # Check user input
   if (!inherits(autocartModel, "autocart")) {
@@ -131,11 +129,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
   # Find out which spatial process each new prediction belongs to
   whichLayer <- predictAutocart(autocartModel, newdata)
-  if (modelByResidual) {
-    returnPredictions <- whichLayer
-  } else {
-    returnPredictions <- rep(0, length(whichLayer))
-  }
+  returnPredictions <- rep(0, length(whichLayer))
 
   # For each row in the new data we wish to predict, find out which spatial process it is a part of
   # then inverse distance weight each of the observations in that spatial process
@@ -181,11 +175,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
         invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
         weights <- as.vector(invDistMatrix)
 
-        if (modelByResidual) {
-          predictVector <- thisGeometry$actual - thisGeometry$pred
-        } else {
-          predictVector <- thisGeometry$actual
-        }
+        predictVector <- thisGeometry$actual
 
         # If an infinite value exists, then we have the exact same location as something that was
         # used to train the model, in which case we should borrow that observation's value for prediction.
@@ -206,12 +196,7 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
         }
       } else if (method == "tps") {
         # Thin-plate spline interpolation using the fields package
-
-        if (modelByResidual) {
-          predictVector <- thisGeometry$actual - thisGeometry$pred
-        } else {
-          predictVector <- thisGeometry$actual
-        }
+        predictVector <- thisGeometry$actual
 
         #fit <- fields::Tps(thisGeometryCoordinates, predictVector)
         #returnPredictions[row] <- returnPredictions[row] + predict.Krig(fit, t(as.matrix(newdataCoords[row, ])))

@@ -14,7 +14,6 @@ spatialNodes(
   method = "idw",
   distpower = 2,
   distpowerRange = c(0, 2),
-  modelByResidual = TRUE,
   decideByGC = FALSE
 )
 }
@@ -30,8 +29,6 @@ spatialNodes(
 \item{distpower}{the power to use if you would like to use something other than straight inverse distance, such as inverse distance squared.}
 
 \item{distpowerRange}{A range of distpower to use. This is an adaptive inverse distance weighting method that linearly matches measures of spatial autocorrelation measured by Moran I to the range mentioned in distpower.}
-
-\item{modelByResidual}{If true, then predict using the average of the "spatial node", and then model the residual using a spatial process. If false, fit a spatial process directly.}
 
 \item{decideByGC}{When determining if a spatial process should be ran at a terminal node, should we use the Geary C statistic instead of Moran I?}
 }

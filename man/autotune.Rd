@@ -8,18 +8,15 @@ autotune(
   response,
   data,
   locations,
-  k = 8,
+  k = 5,
   control = NULL,
   customGroups = NULL,
   alphaVals = NULL,
   betaVals = NULL,
   bandwidthVals = NULL,
-  outputProgress = FALSE,
-  useSpatialNodes = FALSE,
-  spatialNodesMethod = "idw",
-  spatialNodesDistPower = 2,
-  spatialNodesDistPowerRange = c(0, 2),
-  spatialNodesModelByResidual = FALSE
+  powerVals = NULL,
+  rangedPowerOffset = 0,
+  outputProgress = FALSE
 )
 }
 \arguments{
@@ -41,17 +38,17 @@ autotune(
 
 \item{bandwidthVals}{Override the bandwidth values that are expanded in the grid in this function.}
 
+\item{powerVals}{The values of the power parameter to check in the expanded grid.}
+
+\item{rangedPowerOffset}{Given a power parameter in powerVals, this is the
+plus/minus amount of offset given to p for use in a ranged power parameter setting. For example,
+with p=3 and rangedPowerOffset=0.4, we use p1=2.6 and p2=3.4. This parameter to the function
+reduces the massive computational effort in tuning both p1 and p2. Set this to
+0 if you don't want to tune with a ranged power parameter.}
+
 \item{outputProgress}{Print the result of the cross-validations as you are going. This is useful when the cross-validation will be very long and you do not wish to wait.}
 
 \item{useSpatialNodes}{Use an interpolative process at the terminal nodes of the autocart tree for the prediction process}
-
-\item{spatialNodesMethod}{The type of interpolation to use at the terminal nodes}
-
-\item{spatialNodesDistPower}{The power parameter to use in inverse distance weighting at terminal nodes}
-
-\item{spatialNodesDistPowerRange}{The ranged power parameter p1, p2 to use for a varying power parameter}
-
-\item{spatialNodesModelByResidual}{Do the interpolative process on the residuals of the prediction formed by response average at terminal nodes}
 }
 \value{
 A list of the labeled optimal parameters that were chosen for the best predictive accuracy on cross-validation.
@@ -74,12 +71,14 @@ locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:35, ]
 alphaVec <- c(0.0, 0.5)
 betaVec <- c(0.0, 0.2)
 bandwidthVec <- c(1.0)
+powerVec <- c(2.0)
 
 # We'll find the optimal values with 3-fold cross validation:
 # (Due to the large number of cross-validations and trainings that occur,
 # this can take a few minutes.)
 myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
-                   betaVals = betaVec, bandwidthVals = bandwidthVec)
+                   betaVals = betaVec, bandwidthVals = bandwidthVec,
+                   powerVals = powerVec)
 # Inspect the results
 myTune
 
