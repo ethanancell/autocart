@@ -9,7 +9,7 @@ autocartControl(
   minbucket = round(minsplit/3),
   maxdepth = 30,
   maxobsMtxCalc = NULL,
-  distpower = 1,
+  distpower = 2,
   islonglat = TRUE,
   givePredAsFactor = TRUE,
   retainCoords = TRUE,

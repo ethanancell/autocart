@@ -2,31 +2,29 @@
 % Please edit documentation in R/autoforest.R
 \name{autoforest}
 \alias{autoforest}
-\title{Create a forest of autocart trees..}
+\title{Create a forest of autocart trees.}
 \usage{
 autoforest(
-  response,
+  formula,
   data,
-  locations,
   alpha,
   beta,
-  control,
-  numtrees,
+  control = autocartControl(),
+  numtrees = 50,
   mtry = NULL
 )
 }
 \arguments{
-\item{response}{The response vector that goes along with the dataframe of predictors.}
+\item{formula}{An R formula specifying the model.}
 
-\item{data}{The dataframe of predictors.}
+\item{data}{A SpatialPointsDataFrame that contains all the information we will be splitting with,
+along with the coordinate information attached to the dataframe.}
 
-\item{locations}{A matrix of the locations of the dataframe of predictors.}
+\item{alpha}{A scalar value between 0 and 1 to weight autocorrelation against reduction in variance in the tree splitting. A value of 1 indicates full weighting on measures of autocorrelation.}
 
-\item{alpha}{The percentage of weighting on spatial autocorrelation in the splitting function.}
+\item{beta}{A scalar value between 0 and 1 to weight the shape of the region in the splitting}
 
-\item{beta}{The percentage of weighting on spatial compactness in the splitting function.}
-
-\item{control}{A control object from the \code{autocartControl} function that will be used for each tree in the forest.}
+\item{control}{An object of type "autocartControl" returned by the \code{autocartControl} function to control the splitting in the autocart tree.}
 
 \item{numtrees}{The number of autocart trees to create in the forest.}
 
@@ -36,7 +34,7 @@ autoforest(
 An object of type "autoforest", which is a list of the autocart trees.
 }
 \description{
-Create a forest of autocart trees..
+Create a forest of autocart trees.
 }
 \examples{
 # Load some data for an autoforest example

@@ -272,14 +272,14 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     /*Rcout << "predictor pool: ";
     for (int i=0; i<asForestMTry; i++) {
       Rcout << predictorPool[i] << ", ";
-    }*/
-    //Rcout << std::endl;
+    }
+    Rcout << std::endl;*/
   }
 
   // THIS IS NOT A TERMINAL NODE. PROCEED TO FIND THE BEST SPLIT THAT WE CAN HERE.
   // -----------------------------------------------------------------------------
   // Loop through all the columns, finding the best split
-  String bestColumn = 0;
+
   int bestSplit = 0;
   double maxGoodness = 0;
   bool betterSplitFound = false;
@@ -290,9 +290,11 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
   NumericMatrix distanceMatrix = matrixSubsetCells(globalDistanceMatrix, weightsIndices, weightsIndices);
 
   CharacterVector dataframeNames = data.names();
+  String bestColumn = dataframeNames[predictorPool[0]];
   for (int columnIndex=0; columnIndex<poolSize; columnIndex++) {
 
     String column = dataframeNames[predictorPool[columnIndex]];
+    // Rcout << "column: " << column << std::endl;
 
     /* We find the "goodness" vector returned by the splitting function.
      * if there is a goodness value that is better than the best one we have,
@@ -305,21 +307,25 @@ node* AutoTree::createNode(NumericVector response, DataFrame data, NumericMatrix
     if (Rf_isFactor(data[column])) {
       goodnessVector = splitCategorical(response, data[column], locations, spatialWeightsMatrix, distanceMatrix);
       splitByCat = true;
+      // Rcout << "Categorical split." << std::endl;
     }
     else {
       goodnessVector = split(response, data[column], locations, spatialWeightsMatrix, distanceMatrix);
       splitByCat = false;
+      // Rcout << "Regular split." << std::endl;
+      // Rcout << "Goodness: " << goodnessVector << std::endl;
     }
 
     // Replace all NaNs with 0
     for (int tt=0; tt<goodnessVector.size(); tt++) {
       if (NumericVector::is_na(goodnessVector[tt])) {
+        // Rcout << "Am I being triggered?" << std::endl;
         goodnessVector[tt] = 0;
       }
     }
 
     // DEBUG 729
-    // Rcout << "column: " << columnIndex << std::endl;
+    // Rcout << "column index: " << columnIndex << std::endl;
     // Rcout << "Goodness: " << goodnessVector << std::endl;
 
     double tempGoodness = findMax(goodnessVector);
@@ -401,6 +407,8 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
   NumericVector y = clone(response);
   NumericVector x = clone(x_vector);
 
+  // double yavg = mean(y);
+
   NumericMatrix orderedLocations(n, 2);
   NumericMatrix orderedSpatialWeightsMatrix = Rcpp::no_init(n, n);
   NumericMatrix orderedDistanceMatrix = Rcpp::no_init(n, n);
@@ -423,6 +431,13 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
   for (int i=0; i<n; i++) {
     int slotLocation = x_order[i];
     orderedLocations(slotLocation, _) = locations(i, _);
+  }
+
+  // Rcout << "xmin: " << x[0] << std::endl;
+  // Rcout << "xmax: " << x[n-1] << std::endl;
+
+  if (x[0] == x[n-1]) {
+    stop("In a vector we are trying to split on, all values are the exact same. Please check and make sure that the columns of your vectors are not constants.");
   }
 
   // DEBUG 729
@@ -463,6 +478,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
   // DEBUG: what do the objective function vectors look like?
   // Rcout << "t1: " << t1 << std::endl;
   // Rcout << "t2: " << t2 << std::endl;
+  // Rcout << "t3: " << t3 << std::endl;
   // stop("");
 
   // Return the linear combination of the goodness values
@@ -472,6 +488,8 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
 
   NumericVector goodness = t1 + t2 + t3;
 
+  // Rcout << "g: " << goodness << std::endl;
+
   // BUG FIX FROM 7/29/2020
   // Sometimes when you have an ordered x_vector {x, x, x, x, 6, 6, 6, 6, 6, 6} goodness would be {g, g, g, g, g, g, g, g, g}
   // g = {g, g, g, g, g, 0, 0, 0, 0}
@@ -479,6 +497,7 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
   // vector of length 0. If we perform a quick check such that if ordered x @ location of "n-minbucket-1" is
   // the same as x[n-1] then set goodness values starting at g[n-minbucket] until to when x stops being the same as x[n-1]
   // which stops those splits from being chosen.
+  // Rcout << "x: " << x << std::endl;
   if (x[n-minbucket-1] == x[n-1]) {
     double endingX = x[n-1];
     int i = n-minbucket-1;

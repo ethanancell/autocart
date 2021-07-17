@@ -27,10 +27,28 @@ autocart <- function(formula, data, alpha, beta, control = NULL) {
     stop("\"data\" must be a sp::SpatialPointsDataFrame.")
   }
 
-  modelframe <- model.frame(formula, data@data)
+  modelframe <- model.frame(formula(terms(formula, data = data@data, simplify = TRUE)), data@data)
   y_vector <- as.numeric(modelframe[, 1])
   X_matrix <- modelframe[, -1]
   locations <- data@coords
+
+  # Make sure that all the columns of the data being passed in isn't constant.
+  remove_cols <- list()
+  for (colindex in 1:ncol(data@data)) {
+    thiscol <- data@data[, colindex]
+    if (length(unlist(unique(thiscol))) == 1) {
+      # Probably don't need an explicit warning.
+      # warning("You passed in a column to autocart that has a constant value all the way through. Removing this column.")
+      remove_cols <- append(remove_cols, colindex)
+    }
+  }
+  if (length(remove_cols) == ncol(data@data)) {
+    stop("All data frame columns passed in are constant. It is impossible to make any splits.")
+  }
+  if (length(remove_cols) > 0) {
+    remove_cols <- unlist(remove_cols)
+    data@data <- data@data[, -remove_cols]
+  }
 
   # After unraveling all of this, pass it into the CPP function behind
   # the scenes
@@ -151,7 +169,7 @@ predict.autocart <- function(model, newdata, spatialNodes = FALSE,
 #' snow_model <- autocart(y, X, locations, 0.30, 0, snow_control)
 #' @export
 autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
-                            maxobsMtxCalc = NULL, distpower = 1, islonglat = TRUE,
+                            maxobsMtxCalc = NULL, distpower = 2, islonglat = TRUE,
                             givePredAsFactor = TRUE, retainCoords = TRUE, useGearyC = FALSE,
                             runParallel = TRUE, spatialWeightsType = "default",
                             customSpatialWeights = NULL,
@@ -313,9 +331,9 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 
 #' Find the best alpha, beta, and bandwidth values with k-fold cross-validation
 #'
-#' @param response The vector of response values to test on.
-#' @param data The data frame of predictor variables.
-#' @param locations The n by 2 matrix of coordinate information for the known observations
+#' @param formula An R formula specifying the model.
+#' @param data A SpatialPointsDataFrame that contains all the information we will be splitting with,
+#' along with the coordinate information attached to the dataframe.
 #' @param k The number of folds to create in k-fold cross-validation for tuning
 #' @param control An optional control function to send to the autocart creation function
 #' @param customGroups Here, you may supply custom groups for cross-validation. This parameter must be supplied as a factor and labeled from 1:numLevels.
@@ -329,7 +347,6 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' reduces the massive computational effort in tuning both p1 and p2. Set this to
 #' 0 if you don't want to tune with a ranged power parameter.
 #' @param outputProgress Print the result of the cross-validations as you are going. This is useful when the cross-validation will be very long and you do not wish to wait.
-#' @param useSpatialNodes Use an interpolative process at the terminal nodes of the autocart tree for the prediction process
 #' @return A list of the labeled optimal parameters that were chosen for the best predictive accuracy on cross-validation.
 #'
 #' @examples
@@ -359,7 +376,7 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' myTune
 #'
 #' @export
-autotune <- function(response, data, locations, k = 5, control = NULL, customGroups = NULL,
+autotune <- function(formula, data, k = 5, control = NULL, customGroups = NULL,
                      alphaVals = NULL, betaVals = NULL, bandwidthVals = NULL,
                      powerVals = NULL, rangedPowerOffset = 0, outputProgress = FALSE) {
 
@@ -370,14 +387,8 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
 
   # Error checking
   # -----------------
-  if (!is.numeric(response)) {
-    stop("response vector must be numeric.")
-  }
-  if (!is.data.frame(data)) {
-    stop("\"data\" must be a data frame.")
-  }
-  if (!is.matrix(locations)) {
-    stop("\"locations\" must be a matrix.")
+  if (class(data) != "SpatialPointsDataFrame") {
+    stop("\"data\" must be of type sp::SpatialPointsDataFrame.")
   }
   if (!inherits(control, "autocartControl")) {
     stop("\"control\" must be obtained from the autocartControl function.")
@@ -388,17 +399,11 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
   if (missing(k) & missing(customGroups)) {
     stop("\"k\", the number of folds for cross-validation must be supplied")
   }
-  if (!missing(customGroups) & length(customGroups) != length(response)) {
-    stop("Custom groups for cross-validation is not the same length as the response.")
+  if (!missing(customGroups) & length(customGroups) != nrow(data)) {
+    stop("Custom groups for cross-validation is not the same length as the data.")
   }
   if (!missing(customGroups) & !is.factor(customGroups)) {
     stop("Custom groups must be supplied as a factor.")
-  }
-  if (length(response) != nrow(data)) {
-    stop("Response vector must be the same length as the rows in the data.")
-  }
-  if (length(response) != nrow(locations)) {
-    stop("Response vector must be the same length as the rows in the locations.")
   }
 
   # Warnings
@@ -425,7 +430,8 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
 
   # Create the grid of all alpha, beta, and bandwidth proportion values
   testingGrid <- expand.grid(alpha = alphaVals, beta = betaVals,
-                             bandwidth = bandwidthVals, idwPower = powerVals)
+                             bandwidth = bandwidthVals, idwPower = powerVals,
+                             pRange = rangedPowerOffset)
 
   # Take out all the rows where alpha+beta is greater than 1
   testingGrid <- testingGrid[(testingGrid$alpha + testingGrid$beta) <= 1.0, ]
@@ -434,17 +440,17 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
   testingGrid <- testingGrid[testingGrid$bandwidth != 0, ]
 
   # Create the groups of cross-validation
-  xvs <- rep(NA, length = length(response))
+  xvs <- rep(NA, length = nrow(data))
   if (!missing(customGroups)) {
     xvs <- customGroups
   } else {
-    xvs <- rep(1:k, length = length(response))
+    xvs <- rep(1:k, length = nrow(data))
     xvs <- sample(xvs)
     xvs <- as.factor(xvs)
   }
 
   # With all the configurations in testingGrid, return the error rate.
-  minimumRMAE <- 10000000
+  minimumRMAE <- Inf
   rowWithBestRMAE <- -1
   testingRMAE <- vector(mode = "numeric", length = nrow(testingGrid))
   for (testingRow in 1:nrow(testingGrid)) {
@@ -452,46 +458,43 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
     myBeta <- testingGrid$beta[testingRow]
     myBandwidth <- testingGrid$bandwidth[testingRow]
     myPower <- testingGrid$idwPower[testingRow]
+    myPowerOffset <- testingGrid$pRange[testingRow]
 
     control$spatialBandwidthProportion <- myBandwidth
 
+    if (outputProgress) {
+      print(paste("CV ", testingRow, "/", nrow(testingGrid), " (a=", myAlpha,
+                  ", b=", myBeta, ", bw=", myBandwidth, ", p=",
+                  myPower, ", pOff=", myPowerOffset, ")", sep=""))
+    }
+
     # Cross-validate
-    predVector <- rep(NA, length = length(response))
+    predVector <- rep(NA, length = nrow(data))
     for (fold in 1:length(levels(xvs))) {
       train_data <- data[xvs != fold, ]
-      train_response <- response[xvs != fold]
-      train_locations <- locations[xvs != fold, ]
-
       test_data <- data[xvs == fold, ]
-      test_locations <- locations[xvs == fold, ]
 
-      trainedModel <- autocart(train_response, train_data, train_locations, myAlpha, myBeta, control)
+      trainedModel <- autocart(formula, train_data, myAlpha, myBeta, control)
 
-      # Make the prediction depending on the type of prediction process
       if (useSpatialNodes) {
-        if (rangedPowerOffset == 0) {
-          predVector[xvs == fold] <- spatialNodes(trainedModel, test_data, test_locations,
-                                                  distpower = myPower,
-                                                  decideByGC = FALSE)
-        } else {
-          predVector[xvs == fold] <- spatialNodes(trainedModel, test_data, test_locations,
-                                                  distpowerRange = c(myPower - rangedPowerOffset, myPower + rangedPowerOffset),
-                                                  decideByGC = FALSE)
-        }
+        predVector[xvs == fold] <- predict(trainedModel, test_data, spatialNodes = TRUE,
+                                           pRange = c(myPower - myPowerOffset, myPower + myPowerOffset))
       } else {
-        predVector[xvs == fold] <- predictAutocart(trainedModel, test_data)
+        predVector[xvs == fold] <- predict(trainedModel, test_data)
       }
     }
 
     # Get the result and possibly output to console
-    thisRMAE <- rmae(predVector, response)
-    testingRMAE[testingRow] <- rmae(predVector, response)
+    true_resp <- model.frame(formula, data)[, 1]
+    thisRMAE <- rmae(predVector, true_resp)
+    testingRMAE[testingRow] <- thisRMAE
 
     if (outputProgress) {
-      print(paste("CV ", testingRow, "/", nrow(testingGrid), " (a=", myAlpha,
-                  ", b=", myBeta, ", bw=", myBandwidth, ", p=", myPower, ")", sep=""))
       if (thisRMAE < minimumRMAE) {
-        print(paste("New min RMAE:", thisRMAE))
+        print(paste("NEW MIN RMAE:", thisRMAE))
+      }
+      else {
+        print(paste("RMAE: ", thisRMAE))
       }
     }
     if (thisRMAE < minimumRMAE) {
@@ -505,5 +508,6 @@ autotune <- function(response, data, locations, k = 5, control = NULL, customGro
        beta = testingGrid$beta[rowWithBestRMAE],
        bandwidth = testingGrid$bandwidth[rowWithBestRMAE],
        power = testingGrid$idwPower[rowWithBestRMAE],
+       powerOffset = testingGrid$pRange[rowWithBestRMAE],
        bestRMAE = minimumRMAE)
 }

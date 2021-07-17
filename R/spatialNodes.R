@@ -55,8 +55,8 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   if (length(distpowerRange) != 2) {
     stop("\"distpowerRange\" must have exactly two elements.")
   }
-  if (distpowerRange[2] <= distpowerRange[1]) {
-    stop("distpowerRange's second element must be greater than its first element.")
+  if (distpowerRange[2] < distpowerRange[1]) {
+    stop("distpowerRange's second element can't be less than its first element.")
   }
   if (!missing(distpowerRange) & !missing(distpower)) {
     stop("Both distpowerRange and distpower are provided in spatialNodes, this is ambiguous.")
@@ -109,10 +109,11 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
   }
 
   # Find minimum and maximum of Moran's I in all terminal nodes
+  # browser()
   minimumDp <- distpowerRange[1]
   maximumDp <- distpowerRange[2]
-  minimumMi <- 1.0
-  maximumMi <- -1.0
+  minimumMi <- Inf
+  maximumMi <- -Inf
   for (terminalNode in 1:nrow(allTerminalNodes)) {
     myMi <- allTerminalNodes[terminalNode, "mi"]
     if (!is.nan(myMi)) {
@@ -129,7 +130,11 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
   # Find out which spatial process each new prediction belongs to
   whichLayer <- predictAutocart(autocartModel, newdata)
-  returnPredictions <- rep(0, length(whichLayer))
+  returnPredictions <- whichLayer
+
+  # DELETE THIS AFTER DONE:
+  # Try just IDW on top of everything globally.
+  # distToAllPoints <- fields::rdist.earth(newdataCoords, autocartModel$coords[, 1:2])
 
   # For each row in the new data we wish to predict, find out which spatial process it is a part of
   # then inverse distance weight each of the observations in that spatial process
@@ -139,7 +144,14 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
 
     # Only use a spatial effect if a spatial effect exists in this node. If no spatial effect exists, just predict
     # using the average of this node.
+
+    # It looks like sometimes there may be multiple same predictions. Thus, we
+    # need a better way to snuff out which "terminal node" something belongs to.
     thisTerminalNode <- allTerminalNodes[allTerminalNodes$prediction == whichLayer[row], ]
+    # For now let's just use a random one I guess
+    if (nrow(thisTerminalNode) > 1) {
+      thisTerminalNode <- thisTerminalNode[1, ]
+    }
 
     # Evaluate if a spatial process should exist at this terminal node, depending on whether
     # we want to use Geary's C or Moran's I.
@@ -168,14 +180,20 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
         # (assuming that distpowerRange is supplied instead of distpower)
         if (!missing(distpowerRange)) {
           myMi <- thisTerminalNode$mi
-          distpower <- ((myMi - minimumMi) / (maximumMi - minimumMi)) * (maximumDp - minimumDp) + minimumDp
+          if (isTRUE(all.equal(myMi, minimumMi))) {
+            distpower <- minimumDp
+          } else if (isTRUE(all.equal(myMi, maximumMi))) {
+            distpower <- maximumDp
+          } else {
+            distpower <- ((myMi - minimumMi) / (maximumMi - minimumMi)) * (maximumDp - minimumDp) + minimumDp
+          }
         }
 
         # Standard inverse distance weighting procedures
         invDistMatrix <- 1 / (distToAllGeomPoints ^ distpower)
         weights <- as.vector(invDistMatrix)
 
-        predictVector <- thisGeometry$actual
+        predictVector <- thisGeometry$actual - thisGeometry$pred
 
         # If an infinite value exists, then we have the exact same location as something that was
         # used to train the model, in which case we should borrow that observation's value for prediction.
@@ -187,12 +205,9 @@ spatialNodes <- function(autocartModel, newdata, newdataCoords, method = "idw", 
           returnPredictions[row] <- returnPredictions[row] + predictVector[whereInfinite]
 
         } else {
-          sumWeights <- sum(weights)
-
           # Using the weights we found, weight the actual observation value by its weight to obtain a prediction
-          predictedValue <- sum(weights * predictVector) / sumWeights
-
-          returnPredictions[row] <- returnPredictions[row] + predictedValue
+          returnPredictions[row] <- returnPredictions[row] +
+            sum(weights * predictVector) / sum(weights)
         }
       } else if (method == "tps") {
         # Thin-plate spline interpolation using the fields package

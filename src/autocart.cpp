@@ -18,7 +18,7 @@ List autocart_cpp(NumericVector response, DataFrame data, NumericMatrix location
   int minsplit = 20;
   int minbucket = 7;
   int maxdepth = 30;
-  int distpower = 1;
+  int distpower = 2;
   int maxobsMtxCalc = response.size();
   bool islonglat = true;
   bool givePredAsFactor = true;

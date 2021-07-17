@@ -5,9 +5,8 @@
 \title{Find the best alpha, beta, and bandwidth values with k-fold cross-validation}
 \usage{
 autotune(
-  response,
+  formula,
   data,
-  locations,
   k = 5,
   control = NULL,
   customGroups = NULL,
@@ -20,11 +19,10 @@ autotune(
 )
 }
 \arguments{
-\item{response}{The vector of response values to test on.}
+\item{formula}{An R formula specifying the model.}
 
-\item{data}{The data frame of predictor variables.}
-
-\item{locations}{The n by 2 matrix of coordinate information for the known observations}
+\item{data}{A SpatialPointsDataFrame that contains all the information we will be splitting with,
+along with the coordinate information attached to the dataframe.}
 
 \item{k}{The number of folds to create in k-fold cross-validation for tuning}
 
@@ -47,8 +45,6 @@ reduces the massive computational effort in tuning both p1 and p2. Set this to
 0 if you don't want to tune with a ranged power parameter.}
 
 \item{outputProgress}{Print the result of the cross-validations as you are going. This is useful when the cross-validation will be very long and you do not wish to wait.}
-
-\item{useSpatialNodes}{Use an interpolative process at the terminal nodes of the autocart tree for the prediction process}
 }
 \value{
 A list of the labeled optimal parameters that were chosen for the best predictive accuracy on cross-validation.

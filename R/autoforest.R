@@ -72,7 +72,7 @@ autoforest <- function(formula, data, alpha, beta, control = autocartControl(), 
     # Bootstrapped sample of data -
     # Sample 2/3 of the data to prevent infinite spatial weights.
     indices <- 1:n
-    # indices <- sample(indices, size = as.integer((2/3)* n))
+    indices <- sample(indices, size = as.integer((2/3)* n))
 
     thisData <- data[indices, ]
 
@@ -136,6 +136,8 @@ predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
       stop("\"pRange\" must be a numeric vector.")
     }
   }
+
+  # browser()
 
   # Induce a spatial process at the terminal nodes if desired
   if (spatialNodes) {
