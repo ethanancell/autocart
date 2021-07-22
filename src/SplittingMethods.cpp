@@ -6,16 +6,13 @@
  * @author Ethan Ancell
  */
 
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
-
+#include <Rcpp.h>
 #include <math.h>
 #include "AutoTree.h"
 #include "SpatialMethods.h"
 #include "SplittingMethods.h"
 
 using namespace Rcpp;
-using namespace arma;
 
 // ======================================
 // ========== HELPER FUNCTIONS ==========

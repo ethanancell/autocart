@@ -4,9 +4,8 @@
  *
  * @author Ethan Ancell
  */
-#include <RcppArmadillo.h>
+#include <Rcpp.h>
 #include <RcppParallel.h>
-// [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::depends(RcppParallel)]]
 
 #include <math.h>

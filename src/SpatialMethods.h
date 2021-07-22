@@ -1,10 +1,8 @@
 #ifndef AUTOCART_SPATIALMETHODS_H
 #define AUTOCART_SPATIALMETHODS_H
 
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <Rcpp.h>
 using namespace Rcpp;
-using namespace arma;
 
 double euclidDistance(double x1, double y1, double x2, double y2);
 double moranI(NumericVector response, NumericMatrix weights);

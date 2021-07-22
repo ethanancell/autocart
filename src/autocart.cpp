@@ -1,6 +1,5 @@
 #include <cmath>
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <Rcpp.h>
 
 #include "AutoTree.h"
 #include "SpatialMethods.h"

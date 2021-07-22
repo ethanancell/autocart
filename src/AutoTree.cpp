@@ -19,8 +19,7 @@
  *
  * @author Ethan Ancell
  */
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <Rcpp.h>
 
 #include <math.h>
 #include <stack>

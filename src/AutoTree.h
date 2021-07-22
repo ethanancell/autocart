@@ -1,7 +1,7 @@
 #ifndef AUTOCART_AUTOTREE_H
 #define AUTOCART_AUTOTREE_H
 
-#include <RcppArmadillo.h>
+#include <Rcpp.h>
 using namespace Rcpp;
 
 /*

@@ -1,7 +1,7 @@
 Package: autocart
 Type: Package
 Title: Autocorrelation Regression Trees
-Version: 1.4.5
+Version: 1.4.6
 Authors@R: person("Ethan", "Ancell", email = "ethanancell@gmail.com", role = c("aut", "cre"))
 Maintainer: Ethan Ancell <ethanancell@gmail.com>
 Description: A modified version of the classification and regression tree (CART) 
@@ -23,7 +23,6 @@ Imports:
     sp
 LinkingTo: 
     Rcpp,
-    RcppArmadillo,
     RcppParallel
 Suggests:
     testthat,

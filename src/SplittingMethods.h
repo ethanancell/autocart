@@ -1,12 +1,10 @@
 #ifndef AUTOCART_SPLITTINGMETHODS_H
 #define AUTOCART_SPLITTINGMETHODS_H
 
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <Rcpp.h>
 #include "AutoTree.h"
 
 using namespace Rcpp;
-using namespace arma;
 
 // Helper
 NumericMatrix getWeightsMatrix(NumericMatrix locations, int distpower, bool islonglat, double spatialBandwidth, SpatialWeights::Type spatialWeightsType, bool useParallelCalculations);
