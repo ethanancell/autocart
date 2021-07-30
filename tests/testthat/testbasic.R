@@ -4,52 +4,36 @@ library(autocart)
 test_that("Autocart returns sensical output", {
   # Process the dataset so it can be used by autocart
   snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
-  response <- as.matrix(snow$yr50)
-  snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
-                snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
-  locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0.80
-  beta <- 0.10
-  snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
-  response <- as.matrix(snow$yr50)
-  snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
-                     snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
-  locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
 
   # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
   # response so that the test ensures that factors can be used.
   factor_column <- rep(NA, nrow(snow))
-  factor_column[response <= quantile(response)[2]] <- "aa"
-  factor_column[response > quantile(response)[2] & response <= quantile(response)[3]] <- "bb"
-  factor_column[response > quantile(response)[3]] <- "cc"
+  factor_column[snow$yr50 <= quantile(snow$yr50)[2]] <- "aa"
+  factor_column[snow$yr50 > quantile(snow$yr50)[2] & snow$yr50 <= quantile(snow$yr50)[3]] <- "bb"
+  factor_column[snow$yr50 > quantile(snow$yr50)[3]] <- "cc"
   factor_column <- as.factor(factor_column)
   snow <- cbind(snow, factor_column)
+  snow <- na.omit(snow)
 
-  # Give all missing values the average of non-missing column values
-  for (i in 1:ncol(snow)) {
-    # Only can take average if it's a numeric column
-    if (is.numeric(snow[, i])) {
-      snow[is.na(snow[, i]), i] <- mean(snow[, i], na.rm = TRUE)
-    }
-  }
+  # Cut data in half to make a quick run
+  snow <- snow[1:(round(nrow(snow)) / 2), ]
 
-  # For the sake of a timely test run so that CRAN will like it, let's just cut the data in half.
-  datasize <- round(length(response) / 2)
-  response <- response[1:datasize]
-  snow <- snow[1:datasize, ]
-  locations <- locations[1:datasize, ]
+  snow <- SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                 data = snow,
+                                 proj4string = CRS("+proj=longlat"))
+  alpha <- 0.80
+  beta <- 0.10
 
   # Set a spatial bandwidth
-  myControl <- autocartControl(distpower = 2,
-                               spatialWeightsType = "gaussian",
-                               spatialBandwidthProportion = 0.8)
+  myControl <- autocartControl(spatialBandwidthProportion = 0.8)
 
-  model <- autocart(response, snow, locations, alpha, beta, myControl)
+  model <- autocart(yr50 ~ ELEVATION + YRS + TD + MCMT + MWMT + factor_column,
+                    alpha = alpha, beta = beta, data = snow, control = myControl)
 
    # TESTING
   expect_is(model$prediction, "numeric")
-  expect_equal(length(model$prediction), length(response))
-  expect_equal(model$prediction, predictAutocart(model, snow))
+  expect_equal(length(model$prediction), length(snow$yr50))
+  expect_equal(model$prediction, predict(model, newdata = snow))
 })
 
 test_that("Cross-validation with autocart is possible", {
@@ -90,22 +74,27 @@ test_that("Cross-validation with autocart is possible", {
 })
 
 test_that("autocartControl controls the tree correctly", {
-  # Process the dataset to where it can be used by autocart
+  # Process the dataset so it can be used by autocart
   snow <- read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart", mustWork = TRUE))
-  response <- as.matrix(snow$yr50)
-  snow <- data.frame(snow$LONGITUDE, snow$LATITUDE, snow$ELEVATION, snow$YRS, snow$HUC,
-                     snow$TD, snow$FFP, snow$MCMT, snow$MWMT, snow$PPTWT, snow$RH, snow$MAT)
-  locations <- as.matrix(cbind(snow$snow.LONGITUDE, snow$snow.LATITUDE))
-  alpha <- 0
-  beta <- 0
 
-  # Give all missing values the average of non-missing column values
-  for (i in 1:ncol(snow)) {
-    # Only can take average if it's a numeric column
-    if (is.numeric(snow[, i])) {
-      snow[is.na(snow[, i]), i] <- mean(snow[, i], na.rm = TRUE)
-    }
-  }
+  # The snow dataset does not contain factors. Here are some conjured factors that correlate with the
+  # response so that the test ensures that factors can be used.
+  factor_column <- rep(NA, nrow(snow))
+  factor_column[snow$yr50 <= quantile(snow$yr50)[2]] <- "aa"
+  factor_column[snow$yr50 > quantile(snow$yr50)[2] & snow$yr50 <= quantile(snow$yr50)[3]] <- "bb"
+  factor_column[snow$yr50 > quantile(snow$yr50)[3]] <- "cc"
+  factor_column <- as.factor(factor_column)
+  snow <- cbind(snow, factor_column)
+  snow <- na.omit(snow)
+
+  # Cut data in half to make a quick run
+  snow <- snow[1:(round(nrow(snow)) / 2), ]
+
+  snow <- SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                 data = snow,
+                                 proj4string = CRS("+proj=longlat"))
+  alpha <- 0.80
+  beta <- 0.10
 
   # Arbitrary control parameters we will test against
   ms <- 35
@@ -114,7 +103,8 @@ test_that("autocartControl controls the tree correctly", {
   dpower <- 2
 
   my_control <- autocartControl(minsplit = ms, minbucket = mb, maxdepth = md, distpower = dpower)
-  model <- autocart(response, snow, locations, alpha, beta, my_control)
+  model <- autocart(yr50 ~ ELEVATION + YRS + TD + MCMT + MWMT + factor_column,
+                    alpha = alpha, beta = beta, data = snow, control = my_control)
 
   # TESTING
   splitframe <- model$splitframe
