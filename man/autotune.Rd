@@ -58,9 +58,9 @@ Find the best alpha, beta, and bandwidth values with k-fold cross-validation
 #  In a practical application this function can be quite computationally
 #  demanding due to the grid-search nature of the function.)
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50[1:35]
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:35, ]
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:35, ]
+snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                   data = snow)
 
 # Find optimal parameters via cross-validation. We'll search through the
 # following alpha/beta/bandwidth values:
@@ -70,11 +70,9 @@ bandwidthVec <- c(1.0)
 powerVec <- c(2.0)
 
 # We'll find the optimal values with 3-fold cross validation:
-# (Due to the large number of cross-validations and trainings that occur,
-# this can take a few minutes.)
-myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
-                   betaVals = betaVec, bandwidthVals = bandwidthVec,
-                   powerVals = powerVec)
+myTune <- autotune(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+                   k = 3, alphaVals = alphaVec, betaVals = betaVec,
+                   bandwidthVals = bandwidthVec, powerVals = powerVec)
 # Inspect the results
 myTune
 

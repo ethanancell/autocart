@@ -62,15 +62,16 @@ Create the object used for the controlling of the splits in the autocart model
 \examples{
 # Load some data for an autocartControl example
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50[1:40]
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:40, ]
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                   data = snow)
 
 # Create a control object that disallows the tree from having a depth more
 # than 10 and give spatial weights only to observations that are a third of the
 # distance of the longest distance between any two points in the dataset.
 snow_control <- autocartControl(maxdepth = 10, spatialBandwidthProportion = 0.33)
 
-# Pass the created control object to an autocart model
-snow_model <- autocart(y, X, locations, 0.30, 0, snow_control)
+# Create an autocart model
+snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+                       alpha = 0.30, beta = 0, control = snow_control)
 }

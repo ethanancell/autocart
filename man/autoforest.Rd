@@ -39,14 +39,11 @@ Create a forest of autocart trees.
 \examples{
 # Load some data for an autoforest example
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50[1:40]
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
-
-# Create a control object for the autoforest tree
-snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
+snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                   data = snow)
 
 # Create an autoforest model with 5 trees
-snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
-
+snow_model <- autoforest(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+                       alpha = 0.30, beta = 0, numtrees = 5)
 }

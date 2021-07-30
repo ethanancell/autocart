@@ -26,16 +26,17 @@ A numeric vector containing the predicted response value for each of the rows in
 Given an autocart model object, predict for new data passed in
 }
 \examples{
-# Load some data for an autocart predict example
+# Load some data for an autocart example
 snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50[1:40]
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+                                   data = snow)
 
-snow_model <- autocart(y, X, locations, 0.30, 0)
+# Create an autocart model
+snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+                       alpha = 0.30, beta = 0)
 
 # Predict in autocart
-new_X <- X[1:10, ]
-new_loc <- locations[1:10, ]
-autocart_predictions <- predictAutocart(snow_model, new_X)
+new_snow <- snow[1:10, ]
+autocart_predictions <- predict(snow_model, new_snow)
 }

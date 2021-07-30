@@ -13,16 +13,13 @@
 #' @examples
 #' # Load some data for an autoforest example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:40]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
-#'
-#' # Create a control object for the autoforest tree
-#' snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
 #' # Create an autoforest model with 5 trees
-#' snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
-#'
+#' snow_model <- autoforest(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                        alpha = 0.30, beta = 0, numtrees = 5)
 #' @export
 autoforest <- function(formula, data, alpha, beta, control = autocartControl(), numtrees = 50, mtry = NULL) {
 
@@ -101,20 +98,17 @@ autoforest <- function(formula, data, alpha, beta, control = autocartControl(), 
 #' @examples
 #' # Load some data for an autoforest example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:40]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
-#' # Create a control object for the autoforest tree
-#' snow_control <- autocartControl(spatialBandwidthProportion = 1.0)
-#'
-#' # Create an autoforest model with 5 trees (low number chosen for computation time)
-#' snow_model <- autoforest(y, X, locations, 0.30, 0, snow_control, numtrees = 5)
+#' # Create an autoforest model with 5 trees
+#' snow_model <- autoforest(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                        alpha = 0.30, beta = 0, numtrees = 5)
 #'
 #' # Predict for a subset of the data
-#' new_X <- X[1:10, ]
-#' new_loc <- locations[1:10, ]
-#' predicted_values <- predictAutoforest(snow_model, new_X, new_loc, TRUE)
+#' new_snow <- snow[1:10, ]
+#' predicted_values <- predict(snow_model, new_snow)
 #' @export
 predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
                               p = NULL, pRange = NULL) {

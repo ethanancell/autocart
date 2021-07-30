@@ -41,19 +41,3 @@ distance weighting to interpolate. The prediction for the new data that is passe
 by making a prediction to assign it to a group. Next, the residual for the new prediction is
 formed by inverse distance weighting the residual for the other points that are a part of that geometry.
 }
-\examples{
-# Load some data for a spatial nodes example
-snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-y <- snow$yr50[1:40]
-X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
-
-# Create an autocart model
-snow_model <- autocart(y, X, locations, 0.30, 0)
-
-# Predit with the spatial node effect
-new_X <- X[1:10, ]
-new_loc <- locations[1:10, ]
-spatial_node_predictions <- spatialNodes(snow_model, new_X, new_loc, distpowerRange = c(0, 2))
-
-}

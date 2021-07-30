@@ -11,12 +11,13 @@
 #' @examples
 #' # Load some data for an autocart example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:40]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
-#' # Create an autocart model with 50 trees
-#' snow_model <- autocart(y, X, locations, 0.30, 0)
+#' # Create an autocart model
+#' snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                        alpha = 0.30, beta = 0)
 #'
 #' @import fields
 #' @importFrom RcppParallel RcppParallelLibs
@@ -67,18 +68,19 @@ autocart <- function(formula, data, alpha, beta, control = NULL) {
 #' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
 #'
 #' @examples
-#' # Load some data for an autocart predict example
+#' # Load some data for an autocart example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:40]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT, snow$HUC)[1:40, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
-#' snow_model <- autocart(y, X, locations, 0.30, 0)
+#' # Create an autocart model
+#' snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                        alpha = 0.30, beta = 0)
 #'
 #' # Predict in autocart
-#' new_X <- X[1:10, ]
-#' new_loc <- locations[1:10, ]
-#' autocart_predictions <- predictAutocart(snow_model, new_X)
+#' new_snow <- snow[1:10, ]
+#' autocart_predictions <- predict(snow_model, new_snow)
 #' @export
 predict.autocart <- function(model, newdata, spatialNodes = FALSE,
                              p = NULL, pRange = NULL) {
@@ -156,17 +158,18 @@ predict.autocart <- function(model, newdata, spatialNodes = FALSE,
 #' @examples
 #' # Load some data for an autocartControl example
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:40]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:40, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:40, ]
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
 #' # Create a control object that disallows the tree from having a depth more
 #' # than 10 and give spatial weights only to observations that are a third of the
 #' # distance of the longest distance between any two points in the dataset.
 #' snow_control <- autocartControl(maxdepth = 10, spatialBandwidthProportion = 0.33)
 #'
-#' # Pass the created control object to an autocart model
-#' snow_model <- autocart(y, X, locations, 0.30, 0, snow_control)
+#' # Create an autocart model
+#' snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                        alpha = 0.30, beta = 0, control = snow_control)
 #' @export
 autocartControl <- function(minsplit = 20, minbucket = round(minsplit/3), maxdepth = 30,
                             maxobsMtxCalc = NULL, distpower = 2, islonglat = TRUE,
@@ -355,9 +358,9 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' #  In a practical application this function can be quite computationally
 #' #  demanding due to the grid-search nature of the function.)
 #' snow <- na.omit(read.csv(system.file("extdata", "ut2017_snow.csv", package = "autocart")))
-#' y <- snow$yr50[1:35]
-#' X <- data.frame(snow$ELEVATION, snow$MCMT, snow$PPTWT)[1:35, ]
-#' locations <- as.matrix(cbind(snow$LONGITUDE, snow$LATITUDE))[1:35, ]
+#' snow <- snow[1:40, c("yr50", "LONGITUDE", "LATITUDE", "ELEVATION", "MCMT", "PPTWT", "HUC")]
+#' snow <- sp::SpatialPointsDataFrame(coords = snow[, c("LONGITUDE", "LATITUDE")],
+#'                                    data = snow)
 #'
 #' # Find optimal parameters via cross-validation. We'll search through the
 #' # following alpha/beta/bandwidth values:
@@ -367,11 +370,9 @@ rmae <- function(pred, obs, na.rm = TRUE) {
 #' powerVec <- c(2.0)
 #'
 #' # We'll find the optimal values with 3-fold cross validation:
-#' # (Due to the large number of cross-validations and trainings that occur,
-#' # this can take a few minutes.)
-#' myTune <- autotune(y, X, locations, k = 3, alphaVals = alphaVec,
-#'                    betaVals = betaVec, bandwidthVals = bandwidthVec,
-#'                    powerVals = powerVec)
+#' myTune <- autotune(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
+#'                    k = 3, alphaVals = alphaVec, betaVals = betaVec,
+#'                    bandwidthVals = bandwidthVec, powerVals = powerVec)
 #' # Inspect the results
 #' myTune
 #'
