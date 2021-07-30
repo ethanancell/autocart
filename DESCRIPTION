@@ -1,7 +1,7 @@
 Package: autocart
 Type: Package
 Title: Autocorrelation Regression Trees
-Version: 1.5.0
+Version: 1.5.1
 Authors@R: person("Ethan", "Ancell", email = "ethanancell@gmail.com", role = c("aut", "cre"))
 Maintainer: Ethan Ancell <ethanancell@gmail.com>
 Description: A modified version of the classification and regression tree (CART) 

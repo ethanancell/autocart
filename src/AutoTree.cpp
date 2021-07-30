@@ -435,10 +435,6 @@ NumericVector AutoTree::split(NumericVector response, NumericVector x_vector, Nu
   // Rcout << "xmin: " << x[0] << std::endl;
   // Rcout << "xmax: " << x[n-1] << std::endl;
 
-  if (x[0] == x[n-1]) {
-    stop("In a vector we are trying to split on, all values are the exact same. Please check and make sure that the columns of your vectors are not constants.");
-  }
-
   // DEBUG 729
   // Rcout << "(SPLIT) orderedX: " << x << std::endl;
 
