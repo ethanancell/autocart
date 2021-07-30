@@ -1,15 +1,6 @@
-## Resubmission
-This is a resubmission. In this version I have:
-
-* Removed the floor() function that was causing compilation issues on Solaris.
-* Changed header file that was causing compilation issues on Fedora with clang compiler.
-
-Hopefully this should resolve the issues that were noted with the package after my last submission. I tested these new changes with a Solaris testing tool online so I hope that
-it works with what CRAN is using as well.
-
 ## Test environments
 * ubuntu 16.04.6 LTS (on travis-ci) with R 4.02
-* win-builder (checked with both devel and release)
+* macOS 11.5.1 (arm64) with R 4.1.0
 
 ## R CMD check results
 There were no ERRORs or WARNINGs.

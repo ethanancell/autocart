@@ -4,10 +4,10 @@
 \alias{predict.autocart}
 \title{Given an autocart model object, predict for new data passed in}
 \usage{
-\method{predict}{autocart}(model, newdata, spatialNodes = FALSE, p = NULL, pRange = NULL)
+\method{predict}{autocart}(object, newdata, spatialNodes = FALSE, p = NULL, pRange = NULL, ...)
 }
 \arguments{
-\item{model}{An autocart object returned from the autocart() function}
+\item{object}{An autocart object returned from the autocart() function}
 
 \item{newdata}{A dataframe for prediction. If using spatialNodes = TRUE, then
 this dataframe must be a SpatialPointsDataFrame.}
@@ -18,6 +18,8 @@ at the terminal nodes of the autocart tree}
 \item{p}{The power to use in IDW interpolation when using spatial nodes.}
 
 \item{pRange}{A range of powers to use in IDW interpolation when using spatial nodes.}
+
+\item{...}{Extra parameters for predict}
 }
 \value{
 A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.

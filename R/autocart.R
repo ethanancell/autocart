@@ -19,7 +19,7 @@
 #' snow_model <- autocart(yr50 ~ ELEVATION + MCMT + PPTWT + HUC, data = snow,
 #'                        alpha = 0.30, beta = 0)
 #'
-#' @import fields
+#' @import fields sp
 #' @importFrom RcppParallel RcppParallelLibs
 #' @export
 autocart <- function(formula, data, alpha, beta, control = NULL) {
@@ -34,21 +34,27 @@ autocart <- function(formula, data, alpha, beta, control = NULL) {
   locations <- data@coords
 
   # Make sure that all the columns of the data being passed in isn't constant.
-  remove_cols <- list()
-  for (colindex in 1:ncol(data@data)) {
-    thiscol <- data@data[, colindex]
+  remove_cols <- c()
+  for (colindex in 1:ncol(X_matrix)) {
+    thiscol <- X_matrix[, colindex]
+
+    # Toss out columns where splits can't be made
     if (length(unlist(unique(thiscol))) == 1) {
       # Probably don't need an explicit warning.
       # warning("You passed in a column to autocart that has a constant value all the way through. Removing this column.")
       remove_cols <- append(remove_cols, colindex)
+    } else {
+      # Toss out columns that aren't factors or numeric
+      if (!is.numeric(thiscol) & !is.factor(thiscol)) {
+        remove_cols <- append(remove_cols, colindex)
+      }
     }
   }
-  if (length(remove_cols) == ncol(data@data)) {
-    stop("All data frame columns passed in are constant. It is impossible to make any splits.")
+  if (length(remove_cols) == ncol(X_matrix)) {
+    stop("All data frame columns passed in are constant. It is impossible to make any splits. Stopping.")
   }
   if (length(remove_cols) > 0) {
-    remove_cols <- unlist(remove_cols)
-    data@data <- data@data[, -remove_cols]
+    X_matrix <- X_matrix[, -remove_cols]
   }
 
   # After unraveling all of this, pass it into the CPP function behind
@@ -58,13 +64,14 @@ autocart <- function(formula, data, alpha, beta, control = NULL) {
 
 #' Given an autocart model object, predict for new data passed in
 #'
-#' @param model An autocart object returned from the autocart() function
+#' @param object An autocart object returned from the autocart() function
 #' @param newdata A dataframe for prediction. If using spatialNodes = TRUE, then
 #' this dataframe must be a SpatialPointsDataFrame.
 #' @param spatialNodes A boolean indicating whether or not to use a spatial process
 #' at the terminal nodes of the autocart tree
 #' @param p The power to use in IDW interpolation when using spatial nodes.
 #' @param pRange A range of powers to use in IDW interpolation when using spatial nodes.
+#' @param ... Extra parameters for predict
 #' @return A numeric vector containing the predicted response value for each of the rows in the passed in dataframe.
 #'
 #' @examples
@@ -82,8 +89,8 @@ autocart <- function(formula, data, alpha, beta, control = NULL) {
 #' new_snow <- snow[1:10, ]
 #' autocart_predictions <- predict(snow_model, new_snow)
 #' @export
-predict.autocart <- function(model, newdata, spatialNodes = FALSE,
-                             p = NULL, pRange = NULL) {
+predict.autocart <- function(object, newdata, spatialNodes = FALSE,
+                             p = NULL, pRange = NULL, ...) {
   # Basic error checking
   if (class(newdata) != "data.frame" & class(newdata) != "SpatialPointsDataFrame") {
     stop("\"newdata\" must be either a data.frame or a SpatialPointsDataFrame.")
@@ -114,10 +121,10 @@ predict.autocart <- function(model, newdata, spatialNodes = FALSE,
     data_coords <- newdata@coords
 
     if (missing(p) & !missing(pRange)) {
-      return(spatialNodes(model, data_direct, data_coords, method = "idw",
+      return(spatialNodes(object, data_direct, data_coords, method = "idw",
                           distpowerRange = pRange))
     } else if (!missing(p) & missing(pRange)) {
-      return(spatialNodes(model, data_direct, data_coords, method = "idw",
+      return(spatialNodes(object, data_direct, data_coords, method = "idw",
                           distpower = p))
     } else if (!missing(p) & !missing(pRange)) {
       stop("Both p and pRange are supplied when requesting spatial nodes. This is ambiguous.")
@@ -132,7 +139,7 @@ predict.autocart <- function(model, newdata, spatialNodes = FALSE,
       data_direct <- newdata@data
     }
 
-    return(predictAutocart(model, data_direct))
+    return(predictAutocart(object, data_direct))
   }
 }
 

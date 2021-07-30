@@ -148,7 +148,7 @@ void AutoTree::createTree(NumericVector response, DataFrame data, NumericMatrix 
       // Error check
       if (nextNode->isTerminalNode) {
         // Rcout << "Node: " << nodesInTree << std::endl;
-        stop("Error in autocart: no first split could be created. Most likely, there is a problem with the spatial weights matrix.");
+        stop("Error in autocart: no first split could be created. Most likely, there is a problem with your data. Check to make sure that you have no repeat locations, and check that your sample size is sufficiently large.");
       }
 
       // Split the data according to what's contained in "nextNode"

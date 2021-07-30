@@ -86,13 +86,14 @@ autoforest <- function(formula, data, alpha, beta, control = autocartControl(), 
 
 #' Make a prediction using an autoforest model returned from the \code{autoforest} function.
 #'
-#' @param model An S3 object of type "autoforest" returned from the \code{autoforest} function.
+#' @param object An S3 object of type "autoforest" returned from the \code{autoforest} function.
 #' @param newdata The dataframe of predictors for use in prediction. If using
 #' spatial nodes, this must be a SpatialPointsDataFrame.
 #' @param spatialNodes A boolean indicating whether or not to use a spatial process
 #' at the terminal nodes of the tree
 #' @param p The power to use in IDW interpolation when using spatial nodes.
 #' @param pRange A range of powers to use in IDW interpolation with spatial nodes.
+#' @param ... Extra parameters to the \code{predict()} function.
 #' @return A vector of predictions that correspond to the rows in \code{newdata}.
 #'
 #' @examples
@@ -110,11 +111,11 @@ autoforest <- function(formula, data, alpha, beta, control = autocartControl(), 
 #' new_snow <- snow[1:10, ]
 #' predicted_values <- predict(snow_model, new_snow)
 #' @export
-predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
-                              p = NULL, pRange = NULL) {
+predict.autoforest <- function(object, newdata, spatialNodes = FALSE,
+                              p = NULL, pRange = NULL, ...) {
   # Error check
-  if (!inherits(model, "autoforest")) {
-    stop("\"model\" must be of type \"autoforest\", returned from the autoforest() function.")
+  if (!inherits(object, "autoforest")) {
+    stop("\"object\" must be of type \"autoforest\", returned from the autoforest() function.")
   }
   if (class(newdata) != "data.frame" & class(newdata) != "SpatialPointsDataFrame") {
     stop("\"newdata\" must be either a data.frame or a SpatialPointsDataFrame.")
@@ -144,10 +145,10 @@ predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
     data_coords <- newdata@coords
 
     if (missing(p) & !missing(pRange)) {
-      predictionList <- lapply(model, spatialNodes, data_direct, data_coords,
+      predictionList <- lapply(object, spatialNodes, data_direct, data_coords,
                                method = "idw", distpowerRange = pRange)
     } else if (!missing(p) & missing(pRange)) {
-      predictionList <- lapply(model, spatialNodes, data_direct, data_coords,
+      predictionList <- lapply(object, spatialNodes, data_direct, data_coords,
                                method = "idw", distpower = p)
     } else if (!missing(p) & !missing(pRange)) {
       stop("Both p and pRange are supplied when requesting spatial nodes. This is ambiguous.")
@@ -155,7 +156,7 @@ predict.autoforest <- function(model, newdata, spatialNodes = FALSE,
       stop("Neither p or pRange is supplied when requesting spatial nodes.")
     }
   } else {
-    predictionList <- lapply(model, predict, newdata)
+    predictionList <- lapply(object, predict, newdata)
   }
 
   numTrees <- length(predictionList)

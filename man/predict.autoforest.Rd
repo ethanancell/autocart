@@ -4,10 +4,10 @@
 \alias{predict.autoforest}
 \title{Make a prediction using an autoforest model returned from the \code{autoforest} function.}
 \usage{
-\method{predict}{autoforest}(model, newdata, spatialNodes = FALSE, p = NULL, pRange = NULL)
+\method{predict}{autoforest}(object, newdata, spatialNodes = FALSE, p = NULL, pRange = NULL, ...)
 }
 \arguments{
-\item{model}{An S3 object of type "autoforest" returned from the \code{autoforest} function.}
+\item{object}{An S3 object of type "autoforest" returned from the \code{autoforest} function.}
 
 \item{newdata}{The dataframe of predictors for use in prediction. If using
 spatial nodes, this must be a SpatialPointsDataFrame.}
@@ -18,6 +18,8 @@ at the terminal nodes of the tree}
 \item{p}{The power to use in IDW interpolation when using spatial nodes.}
 
 \item{pRange}{A range of powers to use in IDW interpolation with spatial nodes.}
+
+\item{...}{Extra parameters to the \code{predict()} function.}
 }
 \value{
 A vector of predictions that correspond to the rows in \code{newdata}.

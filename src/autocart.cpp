@@ -195,6 +195,11 @@ List autocart_cpp(NumericVector response, DataFrame data, NumericMatrix location
   if (distanceMatrix.nrow() != locations.nrow()) {
     stop("locations, distanceMatrix, and spatialWeightsMatrix must have the same number of rows.");
   }
+  // Make sure that minsplit is at least as great as the sample size
+  if (response.size() < minsplit) {
+    warning("Sample size is less than minsplit parameter. Automatically setting minsplit to be the sample size.");
+    minsplit = response.size();
+  }
 
   // Ensure that the spatial weights matrix doesn't contain any weird values that would stop the tree from working.
   bool na_found = false;
